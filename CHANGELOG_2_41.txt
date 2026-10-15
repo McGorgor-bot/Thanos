@@ -1,0 +1,6 @@
+Thanos 2.41 – mocniejsze przypisywanie nazw z legendy
+- Dodano końcowy, bezpośredni algorytm wyszukiwania opisu po prawej stronie symbolu.
+- Dopasowanie nie wymaga już, aby symbol występował tylko raz.
+- Normalizacja kluczy modelu usuwa nadmiarowe spacje i ignoruje wielkość liter.
+- Dodano licznik przypisanych nazw z legendy w widoku wyników.
+- Dla przykładu D -> domofon zachowana jest osobna kolumna „Nazwa z legendy”.

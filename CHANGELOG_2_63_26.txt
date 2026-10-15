@@ -1,0 +1,7 @@
+THANOS 2.63.26
+
+- Dodano moduł „Excel → ATH”.
+- Import XLSX z automatycznym mapowaniem elementów do katalogu RMS ZEST szablonu ATH.
+- Edytowalne mapowanie KNR, RMS ZEST, jednostki, ceny materiału i robocizny.
+- Generowanie pliku ATH w kodowaniu CP1250 z przeliczoną sumą kontrolną.
+- Zachowano istniejące moduły DWG/DXF, PDF, legendę, Pomiar tras, Odgrom/uziom, podgląd i eksport XLSX.

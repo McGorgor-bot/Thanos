@@ -1,0 +1,6 @@
+Thanos 2.63.15
+
+- Naprawiono wygląd zintegrowanego suwaka trybu jasny/ciemny.
+- Usunięto zależność od aria-label przy stylowaniu suwaka.
+- Słońce, księżyc i uchwyt są renderowane jako jeden element.
+- Zachowano dotychczasową nawigację i funkcje analizy.

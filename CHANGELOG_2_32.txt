@@ -1,0 +1,5 @@
+Thanos 2.32 – poprawka eksportu pomiaru do XLSX
+- Naprawiono TypeError: 'OpenpyxlWriter' object is not subscriptable.
+- Arkusz „Pomiar tras” jest pobierany przez writer.sheets['Pomiar tras'].
+- Zweryfikowano składnię app.py.
+- Pomiar 339,77 m z widocznego testu nie powinien już kończyć się błędem przy tworzeniu XLSX.

@@ -1,0 +1,8 @@
+Thanos 2.63.16
+
+- Naprawiono suwak trybu jasny/ciemny: selektor CSS oparty na sąsiedztwie st.markdown + przycisk nie pasował do struktury DOM Streamlita, więc style nigdy się nie stosowały.
+- Przycisk jest teraz stylowany przez klasę .st-key-theme_slider_action oraz zapasowe selektory :has() (nowy i stary układ kontenerów).
+- Ikony słońca i księżyca to przezroczyste SVG zamiast kwadratowych PNG (brak osobnych pól ikon).
+- Aktywna ikona znajduje się w białym uchwycie, nieaktywna na torze; uchwyt przesuwa się lewo/prawo zależnie od trybu.
+- Usunięto zbędne wczytywanie PNG i nadpisywanie CSS przez replace().
+- Zachowano dotychczasową nawigację i funkcje analizy.

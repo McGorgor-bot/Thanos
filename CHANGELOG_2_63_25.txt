@@ -1,0 +1,6 @@
+THANOS 2.63.25
+
+- Zmniejszono o 50% szerokość panelu „Podgląd zaznaczonego elementu” w widoku analizy CAD/PDF.
+- Domyślny motyw aplikacji zmieniono na ciemny (Blueprint/CAD).
+- Zachowano możliwość ręcznego przełączania jasny/ciemny.
+- Zachowano rzeczywisty renderer geometrii CAD oraz pozostałe funkcjonalności.

@@ -1,0 +1,7 @@
+Thanos 2.63.18
+
+- Ulepszono wykrywanie obszaru legendy w analizie DWG/DXF.
+- Zamiast szerokiego grupowania po promieniu legenda jest rozpoznawana przez relację: nagłówek OZNACZENIA/LEGENDA + wiersze opisów + symbole INSERT umieszczone bezpośrednio po lewej stronie opisów.
+- Ogranicza to błędne wykluczanie elementów projektu znajdujących się w pobliżu legendy.
+- Zachowano dotychczasowy fallback dla legend bez typowego układu.
+- Zweryfikowano na GRO-PP-ELE-Rzut SSP.dxf: wykryto 10 symboli należących do pokazanej legendy, zamiast wcześniejszego nadmiernego wykluczenia 93 INSERT-ów.

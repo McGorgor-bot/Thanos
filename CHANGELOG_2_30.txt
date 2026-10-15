@@ -1,0 +1,4 @@
+Thanos 2.30 – poprawka pomiaru tras
+- Naprawiono błąd: NameError: name 'math' is not defined.
+- Dodano brakujący import modułu math używanego przez pomiar LINE/LWPOLYLINE/POLYLINE.
+- Zweryfikowano składnię aplikacji po poprawce.

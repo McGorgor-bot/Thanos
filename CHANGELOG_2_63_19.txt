@@ -1,0 +1,8 @@
+THANOS 2.63.19
+
+PDF / zgodność z DWG-DXF:
+- Dodano opcjonalny DXF referencyjny w module Analiza PDF.
+- Jeżeli odpowiadający DXF jest dostępny, PDF korzysta z ilości policzonych metodą „Wg bloków CAD”, zapewniając zgodność ilościową z analizą DXF.
+- Dopasowanie PDF↔DXF rozpoznaje arkusze z sufiksem P/P3/Piętro.
+- Dodano niezależny fallback dla wektorowych PDF bez użytecznej legendy: rozpoznawanie powtarzalnych symboli SSP na podstawie geometrii wektorowej.
+- Zachowano analizę OCR, tekstową i dopasowanie symboli z legendy.

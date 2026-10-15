@@ -1,0 +1,5 @@
+Thanos 2.29
+- Naprawiono obsługę przycisku „Oblicz długości”.
+- Błędy pomiaru nie są już cicho ignorowane.
+- Dodano komunikat diagnostyczny przy nieudanym pomiarze.
+- Zachowano pomiar LINE/LWPOLYLINE/POLYLINE i eksport XLSX.

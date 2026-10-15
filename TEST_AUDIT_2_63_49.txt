@@ -1,0 +1,16 @@
+Thanos 2.63.49 — test-first audit (2026-10-10)
+
+Production code was not changed in this audit build. Two additional regression tests were added to tests/run_regression.py:
+1) nested INSERT route geometry with scale transform; expected 2.0 m.
+2) LAN dynamic-property CSV category/grand-total consistency.
+
+Results on the source tree:
+- Existing baseline: 41 PASS, 0 FAIL, 0 SKIP.
+- Extended suite: 42 PASS, 1 FAIL, 0 SKIP.
+- Confirmed failing test: CAD nested INSERT route with scale — expected 2.0 m, actual 0.0 m, rows=0.
+- New LAN CSV category and grand totals test: PASS (KK 200=1.0 m, KK 300=2.5 m, total=3.5 m).
+
+Interpretation:
+The current direct-entity CAD route measurement does not measure line geometry nested inside INSERT blocks, even when transformed by a block scale. This is a confirmed coverage gap. Next step is to implement nested INSERT traversal with proper transforms and anti-double-counting, then rerun this test plus all baseline tests.
+
+Existing PDF route and PDF odgrom/uziom tests pass, including the check that PDF odgrom/uziom UI branch does not invoke DXF measurement. These are regression tests, not exhaustive validation against every PDF.

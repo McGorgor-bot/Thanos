@@ -1,0 +1,6 @@
+Thanos 2.19
+- PDF: lista elementów dla trybu legendy jest tworzona dynamicznie z tekstu wszystkich tabel LEGENDA/LEGEND.
+- Usunięto predefiniowany słownik elementów jako źródło zliczania PDF.
+- Elementy spoza legend nie są zliczane w trybie „PDF: licz tylko elementy opisane na legendzie”.
+- Wszystkie legendy są łączone w jeden zbiór oznaczeń, a wystąpienia w obszarach legend są pomijane.
+- Słownik ręczny pozostaje wyłącznie opcjonalnym narzędziem klasyfikacji.

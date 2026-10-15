@@ -1,0 +1,10 @@
+Thanos 2.63.24
+
+CAD real-geometry preview
+- Podgląd zaznaczonego elementu renderuje rzeczywistą geometrię wybranego INSERT z DXF/DWG.
+- Rozwijane są zagnieżdżone bloki INSERT.
+- Zachowywane są rzeczywiste skale i obrót instancji.
+- Zachowywane są kolory CAD/warstw z dokumentu.
+- Usuwane są z podglądu teksty/atrybuty oraz grafiki warstwy ZASIĘG/RANGE, aby nie pomniejszały właściwego symbolu.
+- Kadr jest wyznaczany na podstawie rzeczywistej geometrii symbolu.
+- Dodano testy regresyjne renderera geometrii CAD.

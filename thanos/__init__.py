@@ -1,0 +1,1 @@
+"""THANOS application package."""

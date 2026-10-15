@@ -1,0 +1,5 @@
+Thanos 2.21
+- Rozszerzono wykrywanie legend w PDF i DXF o nagłówki: OZNACZENIA oraz OZNACZENIE.
+- Oznaczenia są traktowane tak samo jak LEGENDA/LEGEND przy budowaniu dynamicznego słownika.
+- Pomijanie obszarów oznaczeń podczas zliczania pozostaje aktywne.
+- Usunięto zależność od predefiniowanego słownika dla trybu dynamicznej legendy.

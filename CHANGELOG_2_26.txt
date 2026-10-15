@@ -1,0 +1,9 @@
+THANOS 2.26 – PRECYZYJNE WYKLUCZANIE BLOKÓW LEGENDY
+
+- Wykluczanie legendy w DXF odbywa się na poziomie konkretnych referencji INSERT.
+- Nie jest już stosowany jeden globalny promień wokół napisu LEGENDA/OZNACZENIA.
+- Program tworzy lokalny, zwarty klaster symboli wokół każdego nagłówka legendy.
+- Tylko faktycznie wybrane INSERT-y są wykluczane z ilości.
+- Pozostałe wystąpienia tego samego bloku na rysunku są normalnie zliczane.
+- Słownik elementów nadal tworzony jest dynamicznie z elementów znalezionych w legendach.
+- Zachowano obsługę LEGENDA, LEGEND, OZNACZENIA i OZNACZENIE.

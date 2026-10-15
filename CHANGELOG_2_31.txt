@@ -1,0 +1,5 @@
+Thanos 2.31 – definitywna poprawka importu math
+- Poprawiono rzeczywisty plik app.py: wcześniejsza poprawka nie została zapisana do właściwego modułu.
+- Dodano import math na poziomie modułu.
+- Zweryfikowano wszystkie używane funkcje math: sqrt, hypot, atan, sin, dist.
+- app.py przechodzi kompilację Python.

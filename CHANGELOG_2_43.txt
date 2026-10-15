@@ -1,0 +1,7 @@
+Thanos 2.43 – definitywne mapowanie legendy
+- Mapa symbol -> nazwa z legendy jest tworzona bezpośrednio po analizie każdego DXF i zapisywana w sesji.
+- Wyniki widoczne w aplikacji są od razu uzupełniane.
+- Po edycji tabeli przez użytkownika mapowanie jest ponownie nakładane.
+- Eksport XLSX ponownie nakłada mapowanie jako zabezpieczenie.
+- Dla dostarczonego przykładu: D -> domofon.
+- „Nazwa elementu” pozostaje technicznym oznaczeniem.

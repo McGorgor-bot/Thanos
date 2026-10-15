@@ -1,0 +1,4 @@
+2.63.12
+- Zintegrowany suwak motywu.
+- Kliknięcie samego suwaka zmienia tryb jasny/ciemny.
+- Usunięto osobny napis/przycisk „Przełącz tryb”.

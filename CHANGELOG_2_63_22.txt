@@ -1,0 +1,6 @@
+Thanos 2.63.22
+- Dodano obowiązkowy zestaw testów regresyjnych uruchamiany przez tests/run_regression.py.
+- Dodano deterministyczne fixtures DXF/PDF do testów.
+- Testy obejmują składnię, DXF, legendę, dynamiczne nazwy bloków, pomiar tras, PDF, XLSX, nazwę XLSX z datą/godziną oraz kontrakt własnej nawigacji i trybu PDF niezależnego od DXF.
+- Dodano verify_thanos.bat do uruchamiania testów w Windows.
+- Wersja nie powinna być wydawana, jeżeli testy regresyjne zgłoszą FAIL.

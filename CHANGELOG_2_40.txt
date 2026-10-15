@@ -1,0 +1,6 @@
+Thanos 2.40 – poprawka mapowania nazw z legendy
+- Znaleziono przyczynę braku nazw: funkcja mapowania używała collections.Counter, ale moduł collections nie był importowany.
+- Wyjątek był przechwytywany i funkcja zwracała pusty słownik, przez co cała kolumna „Nazwa z legendy” była pusta.
+- Dodano import collections.
+- Zachowano czyszczenie opisów, np. „- domofon” -> „domofon”.
+- app.py przechodzi kompilację.

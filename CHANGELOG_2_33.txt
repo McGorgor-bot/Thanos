@@ -1,0 +1,4 @@
+Thanos 2.33 – poprawka XLSX
+- Usunięto błąd OpenpyxlWriter object is not subscriptable.
+- Arkusz Pomiar tras pobierany przez writer.sheets.
+- Zweryfikowano składnię programu.

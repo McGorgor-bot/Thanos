@@ -1,0 +1,7 @@
+THANOS 2.22
+- poprawiono wykrywanie lokalnych obszarów LEGENDA/OZNACZENIA w DXF;
+- usunięto jeden duży promień zależny od przekątnej całego arkusza;
+- każda legenda otrzymuje własny, lokalny obszar;
+- zachowano dynamiczny słownik tworzony wyłącznie z elementów znalezionych w legendach;
+- bloki G$C... i *U... mogą być zliczane, jeśli są elementami legendy lub odpowiadają legendzie;
+- bloki z trybu „Wg bloków CAD” nadal są zliczane niezależnie od nazwy technicznej.

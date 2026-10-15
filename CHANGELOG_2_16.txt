@@ -1,0 +1,7 @@
+Thanos 2.16
+
+Naprawiono zliczanie bloków o nazwach G$C...
+- G$C36774E9E nie jest już automatycznie pomijany.
+- W trybie „Wg bloków CAD” jest liczony jako prawidłowa nazwa bloku.
+- W trybie „Wg grafik na legendzie” może być liczony, gdy jego identyfikator występuje w legendzie.
+- Zachowano obsługę atrybutów Misc/Name i wykluczanie legendy.

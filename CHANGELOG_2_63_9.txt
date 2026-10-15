@@ -1,0 +1,5 @@
+Thanos 2.63.9
+- Zastąpiono dwa przyciski motywu jednym suwakiem jasny/ciemny w sidebarze.
+- Użyto grafik PNG słońca i księżyca jako stałych ikon.
+- Zachowano stan theme_mode oraz dotychczasową logikę aplikacji.
+- Wersja bazuje na 2.63.8; nie zmieniano analizy DWG/DXF ani podglądu.

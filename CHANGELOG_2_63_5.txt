@@ -1,0 +1,5 @@
+Thanos 2.63.5
+- Naprawiono NameError: name 'classify' is not defined podczas analizy DXF/DWG.
+- Dodano brakujący import classify w thanos/cad.py.
+- Zaktualizowano numer wersji aplikacji do 2.63.5.
+- Zachowano funkcje 2.63.4: dziennik zdarzeń, stały sidebar, podgląd DWG/DXF, eksport XLSX.

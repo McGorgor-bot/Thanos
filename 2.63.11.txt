@@ -1,0 +1,4 @@
+2.63.11
+- Własny graficzny suwak jasny/ciemny z PNG słońca i księżyca.
+- Jedna linia: słońce | suwak | księżyc.
+- Zachowany poziomy postęp analizy i dotychczasowa funkcjonalność.

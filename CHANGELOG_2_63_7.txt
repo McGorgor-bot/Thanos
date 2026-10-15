@@ -1,0 +1,12 @@
+THANOS 2.63.7
+
+FIX – PODGLĄD ZAZNACZONEGO ELEMENTU DWG/DXF
+
+1. Naprawiono rozjazd indeksów między posortowaną tabelą wyników a modułem „Podgląd elementu”.
+   Wcześniej zaznaczenie jednego wiersza mogło pokazywać inny element po przejściu do podglądu.
+
+2. Wynik analizy zachowuje teraz techniczny handle konkretnego INSERT-a (_PreviewHandle), dzięki czemu podgląd może renderować dokładnie wybraną instancję, a nie pierwszy blok o tej samej nazwie.
+
+3. Renderowanie podglądu CAD ustawiono na wysoki kontrast: jasna geometria na ciemnym tle.
+
+4. Zachowano dotychczasową logikę zliczania, legendy, eksportu XLSX, stałego sidebaru i dziennika zdarzeń.

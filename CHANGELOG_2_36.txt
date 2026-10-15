@@ -1,0 +1,8 @@
+Thanos 2.36 – moduł Odgrom/uziom
+- Dodano osobny moduł „Odgrom/uziom”, analogiczny do pomiaru tras.
+- Pomiar LINE/LWPOLYLINE/POLYLINE.
+- Automatycznie sugerowane warstwy: ODGROM, 2DE, BEDNARKA, UZIO, LPS.
+- Grupowanie długości wg kategorii i warstwy.
+- Na podstawie przykładowego DXF rozpoznawane są m.in. warstwy 2DE_PLS_Eb-$Fe$d8$30.1PL i 01_11_BEDNARKA_2.
+- Dodano zliczanie podstawowego osprzętu: zejścia, drut odgromowy, złącza, wyprowadzenia szyn.
+- Eksport do XLSX: Długości, Szczegóły, Osprzęt.

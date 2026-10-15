@@ -1,0 +1,4 @@
+Thanos 2.63.29 – Excel → ATH
+- zabezpieczenie przed utratą cen materiałów po rerunie Streamlit/data_editor; ceny są odzyskiwane z katalogu RMS ZEST, jeśli komórka edytora zwróci 0,00 bez zmiany użytkownika;
+- materiał pomocniczy RMS 413 jest dodawany tylko wtedy, gdy istnieje w katalogu szablonu ATH, aby uniknąć pozycji „Nieznany”;
+- zachowano poprawny zapis podstawy KNNR: „KNNR” + „5 0502-03” w polach ATH.

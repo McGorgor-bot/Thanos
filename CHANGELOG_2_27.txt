@@ -1,0 +1,7 @@
+Thanos 2.27
+- Dodano moduł Pomiar tras kablowych dla DXF.
+- Pomiar LINE/LWPOLYLINE/POLYLINE z uwzględnieniem długości łuków (bulge).
+- Grupowanie długości wg warstwy i arkusza/layoutu.
+- Domyślnie 1 jednostka CAD = 1 mm, wynik w metrach; przelicznik można zmienić.
+- Dodano eksport wyników pomiaru do XLSX.
+- Automatycznie sugerowane są warstwy zawierające TRAS/KORYTO/TRASA/KANAL/DRAB.

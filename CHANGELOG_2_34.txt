@@ -1,0 +1,7 @@
+Thanos 2.34 – pomiar koryt wg szerokości
+- Dodano rozpoznawanie szerokości koryta z właściwości LWPOLYLINE const_width.
+- Dla rysunków w mm program rozpoznaje np. 100/200/300 mm jako K100/K200/K300.
+- Wyniki są grupowane wg Koryto + Szerokość [mm].
+- Dodano osobne podsumowanie „Koryta wg szerokości”.
+- Szczegółowy pomiar nadal zawiera plik, arkusz, warstwę, szerokość i długość.
+- Eksport XLSX zawiera arkusze „Koryta wg szerokości” i „Pomiar tras”.

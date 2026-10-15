@@ -1,0 +1,5 @@
+Thanos 2.63.6
+
+- Naprawiono bardzo długą analizę dużych plików DXF.
+- _dynamic_true_name_map() jest budowany raz na plik, a nie osobno dla każdego INSERT w legendzie.
+- Zachowano dotychczasową logikę zliczania, legendy, podglądu i eksportu.

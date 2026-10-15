@@ -1,0 +1,6 @@
+Thanos 2.42 – poprawka eksportu nazw z legendy
+- „Nazwa elementu” pozostaje techniczną nazwą/modelu (np. D).
+- „Nazwa z legendy” jest osobną kolumną (np. domofon).
+- Przed eksportem XLSX program ponownie buduje mapę legendy bezpośrednio z pliku DXF.
+- Dzięki temu nawet jeśli tabela wynikowa została utworzona wcześniej, XLSX zostanie uzupełniony aktualną nazwą z legendy.
+- Dla przykładu D -> domofon.

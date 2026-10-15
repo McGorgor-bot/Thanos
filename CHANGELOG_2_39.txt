@@ -1,0 +1,7 @@
+Thanos 2.39 – czyszczenie nazw z legendy
+- Dodano normalizację opisów pobieranych z legendy.
+- Usuwane są znaki separujące na początku/końcu: -, –, —, •, :, ;, |.
+- Usuwana jest prosta numeracja legendy, np. „1. - domofon”.
+- Nazwa modelu/Name/Misc pozostaje bez zmian.
+- Przykład: „- domofon” -> „domofon”.
+- app.py przechodzi kompilację.

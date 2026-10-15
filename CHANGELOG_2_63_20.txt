@@ -1,0 +1,4 @@
+Thanos 2.63.20
+- Usunięto z interfejsu modułu Analiza PDF opcjonalny DXF referencyjny dla zgodności ilościowej z CAD.
+- Analiza PDF pozostaje niezależna od DXF i zachowuje dotychczasowe rozpoznawanie tekstu, OCR, legendy i grafiki.
+- Usunięto backendowe wymuszanie wyników PDF na podstawie referencji DXF.

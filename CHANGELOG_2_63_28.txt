@@ -1,0 +1,5 @@
+Thanos 2.63.28
+- Excel -> ATH: robust recovery of RMS ZEST mapping from the stable Element name when Streamlit data_editor returns stale/invalid RMS values.
+- ATH: invalid mapping diagnostics now include the actual RMS ZEST value.
+- ATH: preserves corrected KNNR basis field structure (KNNR / 5 0502-03) without duplicated basis in Norma.
+- Version footer updated to 2.63.28.

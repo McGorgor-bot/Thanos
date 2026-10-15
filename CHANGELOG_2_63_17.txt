@@ -1,0 +1,7 @@
+THANOS v2.63.17
+
+- Ulepszono rozpoznawanie nazw dynamicznych bloków CAD w DXF.
+- Dodano obsługę relacji AcDbBlockRepBTag (group code 1005), która wiąże anonimowe bloki *Uxxx/G$C/A$C z rzeczywistym BLOCK_RECORD.
+- Elementy są grupowane i zliczane wg rzeczywistej nazwy bloku dynamicznego, a techniczna nazwa anonimowego bloku pozostaje zachowana dla śledzenia CAD.
+- Zachowano obsługę atrybutów Misc/Name oraz nazw z legendy.
+- Zweryfikowano na pliku GRO-PP-ELE-Rzut SSP.dxf: m.in. *U840/*U843 -> „optyczna czujka dymu” (200), *U845 -> „Optyczno-termiczna czujka dymu” (314), *U847 -> „ręczny ostrzegacz pożarowy” (58), *U842 -> „optyczna czujka dymu ze wskaźnikiem” (2).

@@ -1,0 +1,5 @@
+Thanos 2.63.14
+- Zintegrowany suwak jasny/ciemny jako jeden przycisk.
+- Słońce, księżyc i uchwyt są renderowane w jednym elemencie; brak osobnych pól ikon.
+- Kliknięcie całego suwaka zmienia tryb.
+- Zachowano dotychczasową funkcjonalność analizy.

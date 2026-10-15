@@ -1,0 +1,6 @@
+Thanos 2.37 – poprawka zakładek
+- Naprawiono konflikt indeksów zakładek po dodaniu modułu Odgrom/uziom.
+- „Odgrom/uziom” nie wymaga już uruchomienia analizy PDF.
+- „Podgląd PDF” ma własną zakładkę i nadal może wymagać analizy PDF.
+- Zestawienie i Projekt przywrócono na właściwe zakładki.
+- app.py przechodzi kompilację.

@@ -1,0 +1,5 @@
+Thanos 2.35 – poprawka sortowania szerokości koryt
+- Naprawiono TypeError: '<' not supported between instances of 'str' and 'int'.
+- Szerokość koryta jest konwertowana numerycznie wyłącznie na potrzeby sortowania.
+- Wartości tekstowe/puste pozostają bezpieczne.
+- Poprawiono sortowanie zestawienia zbiorczego i szczegółowego.

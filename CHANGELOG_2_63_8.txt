@@ -1,0 +1,4 @@
+THANOS 2.63.8
+
+FIX: podgląd DWG/DXF – bezpieczne tworzenie tabeli podglądu.
+Starsze/niepełne rekordy wyników bez _PreviewHandle lub _PreviewLayout nie powodują już KeyError; brakujące kolumny są uzupełniane pustymi wartościami.

@@ -1,0 +1,5 @@
+Thanos 2.28 – poprawka pomiaru tras
+- Naprawiono brak wyświetlania zakładki „Pomiar tras”.
+- Zakładka jest teraz prawidłowo wstawiona między Analizę a Podgląd PDF.
+- Lista warstw do pomiaru zawiera wyłącznie warstwy z LINE/LWPOLYLINE/POLYLINE.
+- Zachowano pomiar łuków z bulge oraz eksport XLSX.

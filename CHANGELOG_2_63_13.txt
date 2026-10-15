@@ -1,0 +1,5 @@
+Thanos 2.63.13
+
+FIX: naprawiono NameError: name 'width' is not defined w ui_theme.py.
+FIX: poprawiono escapowanie nawiasów CSS w f-stringu systemu motywu.
+Zachowano zintegrowany suwak jasny/ciemny oraz dotychczasową funkcjonalność.

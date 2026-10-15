@@ -1,0 +1,6 @@
+Thanos 2.38 – nazwa elementu z legendy
+- Dodano kolumnę „Nazwa z legendy” do wyników i eksportu XLSX.
+- Model/symbol pozostaje w „Name”/„Nazwa elementu”, a opis z legendy trafia do osobnej kolumny.
+- Dodano dynamiczne kojarzenie symbol -> opis z legendy bez słownika predefiniowanego.
+- Dodano fallback dla legend, w których nagłówek LEGENDA jest daleko od wiersza symbolu.
+- Przykład z dostarczonego DXF: D -> domofon.
