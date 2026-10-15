@@ -32,7 +32,7 @@ _CABLE_RE = re.compile(
     r'(?<![A-Z0-9])(' + _CABLE_TERM + r'(?:\s*\+\s*' + _CABLE_TERM + r')*)',
     re.IGNORECASE
 )
-_CABLE_LABEL_RE = re.compile(r'\b(?:K|L|WL|Z|Y)\s*[-_ ]?\s*\d{1,4}\b', re.IGNORECASE)
+_CABLE_LABEL_RE = re.compile(r'(?<![A-Z0-9])(?:[A-Z]{1,8}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*|(?:LZ|WLZ?|ZK|K|OBW)\s*[-_ ]?\s*\d{1,4}[A-Z]?)(?![A-Z0-9])', re.IGNORECASE)
 
 
 def _clean(value: str) -> str:
@@ -694,9 +694,9 @@ def _infer_dxf_context(text_items, filename):
             destinations.append((re.sub(r'\s+', '', upper), x, y))
         if re.search(r'\bZ\s+RG\b', upper) and re.search(r'\b(?:LZ|WLZ|WL)\s*[-_ ]?\d+', upper):
             incoming_from_rg.append((value, x, y))
-        cm = re.search(r'\b(?:LZ|WL|WLZ|ZK|K|OBW)\s*[-_ ]?\d+[A-Z]?\b', upper)
+        cm = re.search(r'(?<![A-Z0-9])(?:[A-Z]{1,8}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*|(?:LZ|WLZ?|ZK|K|OBW)\s*[-_ ]?\s*\d+[A-Z]?)(?![A-Z0-9])', upper)
         if cm:
-            circuits.append((re.sub(r'\\s+', '', cm.group(0)).upper(), x, y))
+            circuits.append((re.sub(r'\s+', '', cm.group(0)).upper(), x, y))
     return board, destinations, circuits, incoming_from_rg
 
 
