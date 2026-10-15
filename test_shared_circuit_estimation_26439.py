@@ -3,7 +3,7 @@ import io
 import ezdxf
 import pandas as pd
 
-from thanos.cable_list import estimate_cable_paths_without_route_layers
+from thanos.cable_list import estimate_cable_paths_without_route_layers, audit_circuit_references, _records_from_text
 
 
 class Upload:
@@ -93,3 +93,30 @@ def test_unknown_dxf_units_do_not_produce_lengths():
     msp.add_text("TP1/S13", dxfattribs={"insert": (1000, 0)})
     result = estimate_cable_paths_without_route_layers([upload(doc)], cable_row())
     assert result.empty
+
+
+def test_circuit_parser_recognizes_slash_style_ids():
+    rows = _records_from_text(
+        "TP1/S13 — N2XH-J 5x2,5\\nTP1/S14 — N2XH-J 5x4",
+        "schemat.pdf", "str. 1"
+    )
+    assert [row["Oznaczenie obwodu"] for row in rows] == ["TP1/S13", "TP1/S14"]
+
+
+def test_circuit_reference_audit_reads_text_and_block_attributes():
+    doc = ezdxf.new("R2013")
+    doc.header["$INSUNITS"] = 4
+    msp = doc.modelspace()
+    msp.add_text("TP1/S13", dxfattribs={"insert": (1000, 1000)})
+    doc.blocks.new(name="DEVICE").add_attdef("CIRCUIT", insert=(0, 0), text="TP1/S14")
+    block = msp.add_blockref("DEVICE", (2000, 2000))
+    block.add_auto_attribs({"CIRCUIT": "TP1/S14"})
+    cables = pd.DataFrame([
+        {"Rozdzielnica źródłowa": "TP1", "Odbiornik / rozdzielnica docelowa": "EL-BA", "Oznaczenie obwodu": "TP1/S13"},
+        {"Rozdzielnica źródłowa": "TP1", "Odbiornik / rozdzielnica docelowa": "WRP-SIN", "Oznaczenie obwodu": "TP1/S14"},
+        {"Rozdzielnica źródłowa": "TP1", "Odbiornik / rozdzielnica docelowa": "GN-1F", "Oznaczenie obwodu": ""},
+    ])
+    result = audit_circuit_references([upload(doc)], cables)
+    assert result.loc[0, "Status dopasowania"] == "Znaleziono w plikach"
+    assert result.loc[1, "Status dopasowania"] == "Znaleziono w plikach"
+    assert result.loc[2, "Status dopasowania"] == "Brak oznaczenia w liście"
