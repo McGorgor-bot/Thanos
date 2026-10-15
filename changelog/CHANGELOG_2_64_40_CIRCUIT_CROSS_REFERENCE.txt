@@ -1,0 +1,11 @@
+Thanos 2.64.40 — rozpoznawanie obwodów ze schematów i rzutów
+
+- Rozszerzono rozpoznawanie oznaczeń w formacie z ukośnikiem, np. TP1/S13 i TP1/S14.
+- Dodano kontrolę oznaczeń na zestawie plików DXF: schematach rozdzielnic i rzutach instalacji.
+- Kontrola uwzględnia teksty, nazwy bloków i atrybuty bloków; porównuje oznaczenia po normalizacji zapisu.
+- Raport wskazuje pozycję listy kablowej, pliki z potwierdzeniem, liczbę wystąpień i brakujące oznaczenia.
+- Nie przypisuje automatycznie najbliższego obwodu do odbiornika; niejednoznaczne powiązania pozostają do weryfikacji.
+- Zachowano oddzielny pomiar geometrii tras i szacowanie wspólnych przebiegów.
+- Dodano testy regresyjne dla oznaczeń z ukośnikiem i odczytu atrybutów bloków.
+
+Uwaga: w tej zmianie kontrola źródeł DXF raportuje dopasowania oznaczeń. Nie zastępuje ręcznej weryfikacji połączeń, gdy dokumentacja nie zawiera jednoznacznego identyfikatora.

@@ -1,0 +1,31 @@
+name: Thanos regression tests
+
+on:
+  push:
+    branches:
+      - main
+      - fix/2.64.39-shared-circuit-estimate
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest
+      - name: Compile Python sources
+        run: python -m compileall -q app.py thanos
+      - name: Run cable-list and DXF regression tests
+        run: |
+          python -m pytest -q test_shared_circuit_estimation_26439.py

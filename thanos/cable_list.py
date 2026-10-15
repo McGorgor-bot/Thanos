@@ -32,7 +32,7 @@ _CABLE_RE = re.compile(
     r'(?<![A-Z0-9])(' + _CABLE_TERM + r'(?:\s*\+\s*' + _CABLE_TERM + r')*)',
     re.IGNORECASE
 )
-_CABLE_LABEL_RE = re.compile(r'\b(?:K|L|WL|Z|Y)\s*[-_ ]?\s*\d{1,4}\b', re.IGNORECASE)
+_CABLE_LABEL_RE = re.compile(r'(?<![A-Z0-9])(?:[A-Z][A-Z0-9]{0,7}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*|(?:LZ|WLZ?|ZK|K|OBW)\s*[-_ ]?\s*\d{1,4}[A-Z]?)(?![A-Z0-9])', re.IGNORECASE)
 
 
 def _clean(value: str) -> str:
@@ -694,9 +694,9 @@ def _infer_dxf_context(text_items, filename):
             destinations.append((re.sub(r'\s+', '', upper), x, y))
         if re.search(r'\bZ\s+RG\b', upper) and re.search(r'\b(?:LZ|WLZ|WL)\s*[-_ ]?\d+', upper):
             incoming_from_rg.append((value, x, y))
-        cm = re.search(r'\b(?:LZ|WL|WLZ|ZK|K|OBW)\s*[-_ ]?\d+[A-Z]?\b', upper)
+        cm = re.search(r'(?<![A-Z0-9])(?:[A-Z][A-Z0-9]{0,7}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*|(?:LZ|WLZ?|ZK|K|OBW)\s*[-_ ]?\s*\d+[A-Z]?)(?![A-Z0-9])', upper)
         if cm:
-            circuits.append((cm.group(0).replace(' ', ''), x, y))
+            circuits.append((re.sub(r'\s+', '', cm.group(0)).upper(), x, y))
     return board, destinations, circuits, incoming_from_rg
 
 
@@ -1045,6 +1045,110 @@ def extract_cable_candidates(uploaded_files, convert_dwg=None) -> pd.DataFrame:
 
 
 
+
+def audit_circuit_references(uploaded_files, cables: pd.DataFrame) -> pd.DataFrame:
+    """Cross-reference cable-list circuit IDs against switchboard schematics and installation plans.
+
+    Reads TEXT/MTEXT plus block names and ATTRIB values from DXF. It reports
+    evidence per file and never silently assigns a nearby, different circuit.
+    """
+    import unicodedata
+    import ezdxf
+
+    cols = ['Indeks pozycji', 'Rozdzielnica źródłowa', 'Odbiornik / rozdzielnica docelowa',
+            'Oznaczenie obwodu', 'Pliki z oznaczeniem', 'Liczba wystąpień',
+            'Status dopasowania', 'Uwagi']
+    if cables is None or cables.empty:
+        return pd.DataFrame(columns=cols)
+
+    def normalize(value):
+        value = unicodedata.normalize('NFKC', _clean(str(value or ''))).upper()
+        return re.sub(r'[^A-Z0-9]+', '', value)
+
+    # Require a slash-style identifier or known circuit-prefix identifier;
+    # generic short equipment labels are not treated as circuit numbers.
+    circuit_re = re.compile(
+        r'(?<![A-Z0-9])(?:[A-Z][A-Z0-9]{0,7}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*'
+        r'|(?:LZ|WLZ?|ZK|OBW|K)\s*[-_ ]?\s*\d{1,4}[A-Z]?)(?![A-Z0-9])',
+        re.IGNORECASE
+    )
+    found_by_file = {}
+    for uploaded in uploaded_files or []:
+        name = getattr(uploaded, 'name', 'plik.dxf')
+        if Path(name).suffix.lower() != '.dxf':
+            continue
+        data = uploaded.getvalue()
+        try:
+            try:
+                doc = ezdxf.read(io.StringIO(data.decode('utf-8-sig', errors='replace')))
+            except Exception:
+                from ezdxf import recover
+                doc, _audit = recover.read(io.BytesIO(data))
+            found = {}
+            for ent in doc.modelspace():
+                kind = ent.dxftype()
+                values = []
+                if kind == 'TEXT':
+                    values = [ent.dxf.text]
+                elif kind == 'MTEXT':
+                    values = [ent.text]
+                elif kind in ('ATTRIB', 'ATTDEF'):
+                    values = [ent.dxf.text]
+                elif kind == 'INSERT':
+                    values = [str(ent.dxf.name)] + [str(a.dxf.text) for a in getattr(ent, 'attribs', [])]
+                for value in values:
+                    for match in circuit_re.finditer(_clean(value)):
+                        label = re.sub(r'\s+', '', match.group(0)).upper()
+                        key = normalize(label)
+                        if key:
+                            found.setdefault(key, {'labels': set(), 'count': 0})
+                            found[key]['labels'].add(label)
+                            found[key]['count'] += 1
+            found_by_file[name] = found
+        except Exception as exc:
+            found_by_file[name] = {'__error__': str(exc)}
+
+    rows = []
+    for idx, row in cables.iterrows():
+        label = _clean(str(row.get('Oznaczenie obwodu', '') or ''))
+        key = normalize(label)
+        source = _clean(str(row.get('Rozdzielnica źródłowa', '') or ''))
+        target = _clean(str(row.get('Odbiornik / rozdzielnica docelowa', '') or ''))
+        files = []
+        count = 0
+        aliases = set()
+        errors = []
+        if key:
+            for filename, found in found_by_file.items():
+                if '__error__' in found:
+                    errors.append(f'{filename}: {found["__error__"]}')
+                    continue
+                item = found.get(key)
+                if item:
+                    files.append(filename)
+                    count += item['count']
+                    aliases.update(item['labels'])
+        if not key:
+            status = 'Brak oznaczenia w liście'
+            note = 'Uzupełnij oznaczenie na podstawie schematu rozdzielnicy; program nie zgaduje.'
+        elif files:
+            status = 'Znaleziono w plikach'
+            note = 'Oznaczenie znalezione dokładnie po normalizacji; sprawdź, czy pliki dotyczą tej samej rozdzielnicy/kondygnacji.'
+        else:
+            status = 'Nie znaleziono'
+            note = 'Nie znaleziono dokładnego oznaczenia w przesłanych DXF. Sprawdź schemat, rzut i atrybuty bloków.'
+        if errors:
+            note += ' Błędy odczytu: ' + '; '.join(errors)
+        rows.append({
+            'Indeks pozycji': idx, 'Rozdzielnica źródłowa': source,
+            'Odbiornik / rozdzielnica docelowa': target, 'Oznaczenie obwodu': label,
+            'Pliki z oznaczeniem': ', '.join(files), 'Liczba wystąpień': count,
+            'Status dopasowania': status,
+            'Uwagi': note + (('; warianty zapisu: ' + ', '.join(sorted(aliases))) if aliases else ''),
+        })
+    return pd.DataFrame(rows, columns=cols)
+
+
 def _route_network_type(layer: str) -> str:
     """Classify a route layer conservatively so electrical and telecom networks never merge."""
     value = str(layer or "").casefold()
@@ -1232,24 +1336,101 @@ def measure_dxf_cable_routes(uploaded_file, route_layers=None, snap_tolerance_mm
     return pd.DataFrame(result)
 
 
-def estimate_cable_paths_without_route_layers(uploaded_files, cables: pd.DataFrame, unit_override="auto") -> pd.DataFrame:
-    """Create explicitly unconfirmed ceiling-path estimates from exact endpoint labels on plans.
+def _manhattan_shared_tree_length(points):
+    """Length of a minimum Manhattan spanning tree in drawing units."""
+    points = list(dict.fromkeys((float(x), float(y)) for x, y in points))
+    if len(points) < 2:
+        return 0.0
+    used = {0}
+    best = [abs(x - points[0][0]) + abs(y - points[0][1]) for x, y in points]
+    best[0] = 0.0
+    total = 0.0
+    while len(used) < len(points):
+        pick = min((i for i in range(len(points)) if i not in used), key=lambda i: best[i])
+        total += best[pick]
+        used.add(pick)
+        x, y = points[pick]
+        for i, (px, py) in enumerate(points):
+            if i not in used:
+                best[i] = min(best[i], abs(px - x) + abs(py - y))
+    return total
 
-    This fallback is intentionally separate from measured route geometry. It only works when
-    both source and destination labels are found in the same DXF Model Space; it uses an
-    orthogonal (Manhattan) ceiling path and marks every result as an estimate requiring review.
-    It never treats a schematic, proximity alone, or a crossing as a connected route.
+
+def _cluster_circuit_points(points, max_gap_units):
+    """Split repeated circuit labels into spatially separate plan/view clusters."""
+    points = list(points)
+    parent = list(range(len(points)))
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+    for i, (x, y, _label) in enumerate(points):
+        for j in range(i):
+            px, py, _ = points[j]
+            if math.hypot(x - px, y - py) <= max_gap_units:
+                union(i, j)
+    groups = {}
+    for i, point in enumerate(points):
+        groups.setdefault(find(i), []).append(point)
+    return list(groups.values())
+
+
+def estimate_cable_paths_without_route_layers(
+    uploaded_files, cables: pd.DataFrame, unit_override="auto",
+    room_height=3.0, source_height=0.3, device_height=2.0, reserve_pct=10.0,
+) -> pd.DataFrame:
+    """Estimate a shared cable route per circuit from repeated circuit labels.
+
+    Repeated labels such as TP1/S13 represent multiple receivers on one circuit.
+    Their common run is estimated once with a Manhattan spanning tree, not as a
+    separate source-to-each-receiver length. Spatially separated plan views are
+    clustered so model-space placement of separate plans does not create a huge
+    artificial connection. The result remains an unconfirmed estimate.
     """
     import ezdxf
     import unicodedata
+    import json
+
     def norm(value):
         value = unicodedata.normalize('NFKC', _clean(str(value or ''))).casefold()
         return re.sub(r'[^a-z0-9]+', '', value)
-    cols = ['Indeks pozycji', 'Oznaczenie obwodu', 'Rozdzielnica źródłowa',
-            'Odbiornik / rozdzielnica docelowa', 'Długość trasy [m]', 'Plik źródłowy', 'Status', 'Uwagi']
+
+    cols = [
+        'Indeks pozycji', 'Indeksy pozycji', 'Rozdzielnica źródłowa',
+        'Oznaczenie obwodu', 'Liczba odbiorników', 'Liczba grup przestrzennych',
+        'Długość trasy [m]', 'Odcinek poza trasą [m]',
+        'Długość orientacyjna z zapasem [m]', 'Plik źródłowy', 'Status', 'Uwagi',
+    ]
     if cables is None or cables.empty or not uploaded_files:
         return pd.DataFrame(columns=cols)
-    override_map = {'mm': 0.001, 'cm': 0.01, 'm': 1.0}
+
+    override_map = {'mm': 0.001, 'millimeter': 0.001, 'millimeters': 0.001,
+                    'cm': 0.01, 'centimeter': 0.01, 'centimeters': 0.01,
+                    'm': 1.0, 'meter': 1.0, 'meters': 1.0}
+    grouped = {}
+    for idx, row in cables.iterrows():
+        source = _clean(str(row.get('Rozdzielnica źródłowa', '') or ''))
+        circuit = _clean(str(row.get('Oznaczenie obwodu', '') or ''))
+        ns, nc = norm(source), norm(circuit)
+        if not nc:
+            continue
+        # Infer the source from the circuit prefix only if the source field is empty.
+        if not ns and '/' in circuit:
+            source = circuit.split('/', 1)[0].strip()
+            ns = norm(source)
+        item = grouped.setdefault((ns, nc), {
+            'source': source, 'circuit': circuit, 'indices': [], 'targets': []
+        })
+        item['indices'].append(idx)
+        target = _clean(str(row.get('Odbiornik / rozdzielnica docelowa', '') or ''))
+        if target:
+            item['targets'].append(target)
+
     results = []
     for uploaded in uploaded_files:
         name = getattr(uploaded, 'name', 'plan.dxf')
@@ -1265,40 +1446,119 @@ def estimate_cable_paths_without_route_layers(uploaded_files, cables: pd.DataFra
         factor = override_map.get(str(unit_override or 'auto').casefold(), {4: .001, 5: .01, 6: 1.0}.get(units))
         if factor is None:
             continue
+
         label_points = {}
         for ent in doc.modelspace():
             typ = ent.dxftype()
             if typ not in ('TEXT', 'MTEXT'):
                 continue
             text = _clean(ent.dxf.text if typ == 'TEXT' else ent.text)
-            if not text:
+            key = norm(text)
+            if not key:
                 continue
-            point = ent.dxf.insert
-            label_points.setdefault(norm(text), []).append((float(point.x), float(point.y), text))
-        for idx, row in cables.iterrows():
-            source = _clean(str(row.get('Rozdzielnica źródłowa', '') or ''))
-            target = _clean(str(row.get('Odbiornik / rozdzielnica docelowa', '') or ''))
-            ns, nt = norm(source), norm(target)
-            if not ns or not nt or ns == nt or ns not in label_points or nt not in label_points:
+            pt = ent.dxf.insert
+            label_points.setdefault(key, []).append((float(pt.x), float(pt.y), text))
+
+        for (ns, nc), item in grouped.items():
+            circuit_points = label_points.get(nc, [])
+            circuit_labels_found = bool(circuit_points)
+            # Backward-compatible fallback for legacy rows whose destination labels
+            # are named individually and whose circuit label is not on the plan.
+            if not circuit_points:
+                # Legacy endpoint-to-endpoint estimation requires a unique source;
+                # never silently accept an ambiguous duplicate source label.
+                if ns and len(label_points.get(ns, [])) != 1:
+                    continue
+                fallback = []
+                for target in dict.fromkeys(item['targets']):
+                    found = label_points.get(norm(target), [])
+                    if len(found) != 1:
+                        fallback = []
+                        break
+                    fallback.extend(found)
+                circuit_points = fallback
+            if not circuit_points:
                 continue
-            # Multiple identical labels make the endpoint ambiguous; do not guess which one.
-            if len(label_points[ns]) != 1 or len(label_points[nt]) != 1:
+
+            # Collapse duplicate text objects at virtually the same position.
+            point_tol = max(1e-6, 0.25 / factor)
+            unique_points = []
+            for x, y, label in sorted(circuit_points, key=lambda p: (p[0], p[1])):
+                if not any(math.hypot(x-px, y-py) <= point_tol for px, py, _ in unique_points):
+                    unique_points.append((x, y, label))
+            if not unique_points:
                 continue
-            sx, sy, sl = label_points[ns][0]
-            tx, ty, tl = label_points[nt][0]
-            length = (abs(tx - sx) + abs(ty - sy)) * factor
-            if length <= 0:
-                continue
-            results.append({'Indeks pozycji': idx, 'Oznaczenie obwodu': _clean(str(row.get('Oznaczenie obwodu', '') or '')),
-                'Rozdzielnica źródłowa': source, 'Odbiornik / rozdzielnica docelowa': target,
-                'Długość trasy [m]': round(length, 3), 'Plik źródłowy': name,
-                'Status': 'Szacunek — niepotwierdzony',
-                'Uwagi': f'Szacunek ortogonalny po suficie między dokładnymi etykietami {sl} ↔ {tl}; brak zdefiniowanej trasy kablowej. Wymaga sprawdzenia przebiegu i drożności.'})
+
+            source_points = label_points.get(ns, []) if ns else []
+            source_point = source_points[0] if len(source_points) == 1 else None
+            # A source label far from all receiver labels is often on another
+            # model-space plan; never connect separated plan views with a fake run.
+            max_source_gap = 20.0 / factor
+            source_linked = bool(source_point and min(
+                math.hypot(source_point[0]-x, source_point[1]-y) for x, y, _ in unique_points
+            ) <= max_source_gap)
+
+            # Plans in one DXF may be laid out far apart in Model Space. Estimate
+            # each local cluster independently and sum only local route trees.
+            clusters = _cluster_circuit_points(unique_points, 15.0 / factor)
+            route_units = 0.0
+            linked_clusters = 0
+            for cluster in clusters:
+                points = [(x, y) for x, y, _ in cluster]
+                if source_linked and source_point and min(
+                    math.hypot(source_point[0]-x, source_point[1]-y) for x, y, _ in cluster
+                ) <= max_source_gap:
+                    points.append((source_point[0], source_point[1]))
+                    linked_clusters += 1
+                route_units += _manhattan_shared_tree_length(points)
+
+            route_m = route_units * factor
+            receiver_count = len(unique_points)
+            source_drop = max(0.0, float(room_height) - float(source_height)) if source_linked else 0.0
+            receiver_drops = max(0.0, float(room_height) - float(device_height)) * receiver_count
+            total_with_reserve = (route_m + source_drop + receiver_drops) * (1 + float(reserve_pct) / 100.0)
+            if source_linked:
+                source_note = (
+                    f'Rozdzielnica {item["source"]} została połączona geometrycznie z '
+                    f'{linked_clusters} grupą/grupami.'
+                )
+                if linked_clusters < len(clusters):
+                    source_note += (
+                        f' Pozostałe {len(clusters) - linked_clusters} oddalone grupy '
+                        'oszacowano lokalnie; nie zostały dopisane jako sztuczny odcinek i nie zostały połączone '
+                        'z rozdzielnicą.'
+                    )
+            else:
+                source_note = (
+                    f'Nie znaleziono jednoznacznej etykiety źródła {item["source"]!r} '
+                    'w odległości do 20 m od oznaczeń obwodu; pion źródłowy i połączenie '
+                    'między oddalonymi rzutami nie zostały dopisane.'
+                )
+            results.append({
+                'Indeks pozycji': item['indices'][0],
+                'Indeksy pozycji': json.dumps(item['indices'], ensure_ascii=False),
+                'Rozdzielnica źródłowa': item['source'],
+                'Oznaczenie obwodu': item['circuit'],
+                'Liczba odbiorników': receiver_count,
+                'Liczba grup przestrzennych': len(clusters),
+                'Długość trasy [m]': round(route_m, 3),
+                'Odcinek poza trasą [m]': round(source_drop + receiver_drops, 3),
+                'Długość orientacyjna z zapasem [m]': round(total_with_reserve, 3),
+                'Plik źródłowy': name,
+                'Status': ('Szacunek wspólnego przebiegu — niepotwierdzony' if circuit_labels_found else 'Szacunek — niepotwierdzony'),
+                'Uwagi': (
+                    f'Obwód {item["circuit"]}: {receiver_count} unikalnych lokalizacji etykiety, '
+                    f'{len(clusters)} grup przestrzennych. Wspólne odcinki policzono raz metodą '
+                    f'drzewa Manhattan; piony: źródło {source_drop:.2f} m, odbiorniki '
+                    f'{receiver_drops:.2f} m; zapas {float(reserve_pct):g}%. {source_note} '
+                    'Szacunek nie odtwarza rzeczywistych korytarzy, przeszkód ani topologii rozgałęzień; '
+                    'zweryfikować na rzucie przed kosztorysowaniem.'
+                ),
+            })
     result = pd.DataFrame(results, columns=cols)
     if not result.empty:
-        # Only keep a candidate if a cable row has exactly one estimate across all plans.
-        result = result[~result['Indeks pozycji'].duplicated(keep=False)].reset_index(drop=True)
-    return result
+        result = result.drop_duplicates(subset=['Rozdzielnica źródłowa', 'Oznaczenie obwodu', 'Plik źródłowy'], keep='first')
+    return result.reset_index(drop=True)
 
 
 def suggest_cable_route_matches(cables: pd.DataFrame, routes: pd.DataFrame) -> pd.DataFrame:
