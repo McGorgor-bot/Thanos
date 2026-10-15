@@ -32,7 +32,7 @@ _CABLE_RE = re.compile(
     r'(?<![A-Z0-9])(' + _CABLE_TERM + r'(?:\s*\+\s*' + _CABLE_TERM + r')*)',
     re.IGNORECASE
 )
-_CABLE_LABEL_RE = re.compile(r'(?<![A-Z0-9])(?:[A-Z]{1,8}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*|(?:LZ|WLZ?|ZK|K|OBW)\s*[-_ ]?\s*\d{1,4}[A-Z]?)(?![A-Z0-9])', re.IGNORECASE)
+_CABLE_LABEL_RE = re.compile(r'(?<![A-Z0-9])(?:[A-Z][A-Z0-9]{0,7}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*|(?:LZ|WLZ?|ZK|K|OBW)\s*[-_ ]?\s*\d{1,4}[A-Z]?)(?![A-Z0-9])', re.IGNORECASE)
 
 
 def _clean(value: str) -> str:
@@ -694,7 +694,7 @@ def _infer_dxf_context(text_items, filename):
             destinations.append((re.sub(r'\s+', '', upper), x, y))
         if re.search(r'\bZ\s+RG\b', upper) and re.search(r'\b(?:LZ|WLZ|WL)\s*[-_ ]?\d+', upper):
             incoming_from_rg.append((value, x, y))
-        cm = re.search(r'(?<![A-Z0-9])(?:[A-Z]{1,8}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*|(?:LZ|WLZ?|ZK|K|OBW)\s*[-_ ]?\s*\d+[A-Z]?)(?![A-Z0-9])', upper)
+        cm = re.search(r'(?<![A-Z0-9])(?:[A-Z][A-Z0-9]{0,7}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*|(?:LZ|WLZ?|ZK|K|OBW)\s*[-_ ]?\s*\d+[A-Z]?)(?![A-Z0-9])', upper)
         if cm:
             circuits.append((re.sub(r'\s+', '', cm.group(0)).upper(), x, y))
     return board, destinations, circuits, incoming_from_rg
@@ -1068,7 +1068,7 @@ def audit_circuit_references(uploaded_files, cables: pd.DataFrame) -> pd.DataFra
     # Require a slash-style identifier or known circuit-prefix identifier;
     # generic short equipment labels are not treated as circuit numbers.
     circuit_re = re.compile(
-        r'(?<![A-Z0-9])(?:[A-Z]{1,8}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*'
+        r'(?<![A-Z0-9])(?:[A-Z][A-Z0-9]{0,7}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*'
         r'|(?:LZ|WLZ?|ZK|OBW|K)\s*[-_ ]?\s*\d{1,4}[A-Z]?)(?![A-Z0-9])',
         re.IGNORECASE
     )
@@ -1525,7 +1525,7 @@ def estimate_cable_paths_without_route_layers(
                 if linked_clusters < len(clusters):
                     source_note += (
                         f' Pozostałe {len(clusters) - linked_clusters} oddalone grupy '
-                        'oszacowano lokalnie; nie zostały połączone sztucznym odcinkiem '
+                        'oszacowano lokalnie; nie zostały dopisane jako sztuczny odcinek i nie zostały połączone '
                         'z rozdzielnicą.'
                     )
             else:
