@@ -498,9 +498,9 @@ if st.session_state.get('ui_page') == 'cables':
                 )
                 st.session_state['cable_route_estimates'] = _estimate_df
                 if _estimate_df.empty:
-                    st.warning('Nie utworzono szacunków. Potrzebne są dokładnie po jednej etykiecie źródła i odbiornika w tym samym DXF oraz znane jednostki rysunku.')
+                    st.warning('Nie utworzono szacunków. Sprawdź oznaczenia obwodów, rozdzielnicy źródłowej i jednostki DXF; powtarzające się etykiety obwodu są grupowane jako wspólny przebieg.')
                 else:
-                    st.warning(f'Utworzono {len(_estimate_df)} szacunków ortogonalnych. Nie są to pomiary rzeczywiste i wymagają sprawdzenia na rzucie.')
+                    st.warning(f'Utworzono {len(_estimate_df)} szacunków wspólnych przebiegów obwodów. Wspólne odcinki są liczone raz; rozdzielone przestrzennie rzuty nie są łączone sztucznym odcinkiem. Wyniki wymagają sprawdzenia na rzucie.')
             except Exception as _estimate_exc:
                 st.error(f'Nie udało się oszacować brakujących tras: {type(_estimate_exc).__name__}: {_estimate_exc}')
         _route_estimates = st.session_state.get('cable_route_estimates', pd.DataFrame())
