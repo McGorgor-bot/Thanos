@@ -453,6 +453,29 @@ if st.session_state.get('ui_page') == 'cables':
         if _active_profile:
             st.info(f"Aktywny profil: {_active_profile.get('nazwa_projektu','bez nazwy')} · warstwy tras: {', '.join(_profile_route_layers) or 'brak — zostaną użyte warstwy domyślne'} · jednostki: {_profile_unit}")
         _route_uploads = st.file_uploader('Rzuty tras kablowych (DXF) i/lub diagnostyka osi Cablofil (CSV) — można wybrać kilka plików', type=['dxf','csv'], accept_multiple_files=True, key='cable_route_dxf_uploads') or []
+        _circuit_reference_uploads = st.file_uploader(
+            'Schematy rozdzielnic i rzuty instalacji do rozpoznania obwodów (DXF)',
+            type=['dxf'], accept_multiple_files=True, key='cable_circuit_reference_uploads'
+        ) or []
+        if _circuit_reference_uploads:
+            st.caption('Schematy i rzuty służą do identyfikacji obwodów; schematy nie są traktowane jako fizyczne trasy kablowe.')
+        if st.button('🔎 Sprawdź oznaczenia obwodów na schematach i rzutach',
+                     key='cable_circuit_reference_audit', use_container_width=True,
+                     disabled=not _circuit_reference_uploads):
+            try:
+                _audit_df = audit_circuit_references(
+                    _circuit_reference_uploads,
+                    st.session_state.get('cable_list_edited_df',
+                        st.session_state.get('cable_list_df', pd.DataFrame(columns=CABLE_COLUMNS)))
+                )
+                st.session_state['cable_circuit_reference_audit'] = _audit_df
+                _found_n = int(_audit_df['Status dopasowania'].eq('Znaleziono w plikach').sum()) if not _audit_df.empty else 0
+                st.success(f'Kontrola zakończona: znaleziono oznaczenia dla {_found_n} z {len(_audit_df)} pozycji listy kablowej.')
+            except Exception as _audit_exc:
+                st.error(f'Nie udało się sprawdzić oznaczeń obwodów: {type(_audit_exc).__name__}: {_audit_exc}')
+        _circuit_audit_df = st.session_state.get('cable_circuit_reference_audit', pd.DataFrame())
+        if isinstance(_circuit_audit_df, pd.DataFrame) and not _circuit_audit_df.empty:
+            st.dataframe(_circuit_audit_df, use_container_width=True, hide_index=True)
         if _route_uploads:
             st.caption('Wgraj razem rzuty wszystkich kondygnacji tego samego projektu. Schematy RG/TP1 pomagają ustalić końce kabla, ale nie są mierzone jako fizyczne trasy.')
         if st.button('📐 Zmierz trasy ze wszystkich plików', key='cable_route_measure', use_container_width=True, disabled=not _route_uploads):
