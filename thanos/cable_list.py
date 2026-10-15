@@ -696,7 +696,7 @@ def _infer_dxf_context(text_items, filename):
             incoming_from_rg.append((value, x, y))
         cm = re.search(r'\b(?:LZ|WL|WLZ|ZK|K|OBW)\s*[-_ ]?\d+[A-Z]?\b', upper)
         if cm:
-            circuits.append((cm.group(0).replace(' ', ''), x, y))
+            circuits.append((re.sub(r'\\s+', '', cm.group(0)).upper(), x, y))
     return board, destinations, circuits, incoming_from_rg
 
 
