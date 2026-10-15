@@ -1045,6 +1045,110 @@ def extract_cable_candidates(uploaded_files, convert_dwg=None) -> pd.DataFrame:
 
 
 
+
+def audit_circuit_references(uploaded_files, cables: pd.DataFrame) -> pd.DataFrame:
+    """Cross-reference cable-list circuit IDs against switchboard schematics and installation plans.
+
+    Reads TEXT/MTEXT plus block names and ATTRIB values from DXF. It reports
+    evidence per file and never silently assigns a nearby, different circuit.
+    """
+    import unicodedata
+    import ezdxf
+
+    cols = ['Indeks pozycji', 'Rozdzielnica źródłowa', 'Odbiornik / rozdzielnica docelowa',
+            'Oznaczenie obwodu', 'Pliki z oznaczeniem', 'Liczba wystąpień',
+            'Status dopasowania', 'Uwagi']
+    if cables is None or cables.empty:
+        return pd.DataFrame(columns=cols)
+
+    def normalize(value):
+        value = unicodedata.normalize('NFKC', _clean(str(value or ''))).upper()
+        return re.sub(r'[^A-Z0-9]+', '', value)
+
+    # Require a slash-style identifier or known circuit-prefix identifier;
+    # generic short equipment labels are not treated as circuit numbers.
+    circuit_re = re.compile(
+        r'(?<![A-Z0-9])(?:[A-Z]{1,8}\s*/\s*[A-Z0-9]{1,8}(?:[._-][A-Z0-9]{1,8})*'
+        r'|(?:LZ|WLZ?|ZK|OBW|K)\s*[-_ ]?\s*\d{1,4}[A-Z]?)(?![A-Z0-9])',
+        re.IGNORECASE
+    )
+    found_by_file = {}
+    for uploaded in uploaded_files or []:
+        name = getattr(uploaded, 'name', 'plik.dxf')
+        if Path(name).suffix.lower() != '.dxf':
+            continue
+        data = uploaded.getvalue()
+        try:
+            try:
+                doc = ezdxf.read(io.StringIO(data.decode('utf-8-sig', errors='replace')))
+            except Exception:
+                from ezdxf import recover
+                doc, _audit = recover.read(io.BytesIO(data))
+            found = {}
+            for ent in doc.modelspace():
+                kind = ent.dxftype()
+                values = []
+                if kind == 'TEXT':
+                    values = [ent.dxf.text]
+                elif kind == 'MTEXT':
+                    values = [ent.text]
+                elif kind in ('ATTRIB', 'ATTDEF'):
+                    values = [ent.dxf.text]
+                elif kind == 'INSERT':
+                    values = [str(ent.dxf.name)] + [str(a.dxf.text) for a in getattr(ent, 'attribs', [])]
+                for value in values:
+                    for match in circuit_re.finditer(_clean(value)):
+                        label = re.sub(r'\s+', '', match.group(0)).upper()
+                        key = normalize(label)
+                        if key:
+                            found.setdefault(key, {'labels': set(), 'count': 0})
+                            found[key]['labels'].add(label)
+                            found[key]['count'] += 1
+            found_by_file[name] = found
+        except Exception as exc:
+            found_by_file[name] = {'__error__': str(exc)}
+
+    rows = []
+    for idx, row in cables.iterrows():
+        label = _clean(str(row.get('Oznaczenie obwodu', '') or ''))
+        key = normalize(label)
+        source = _clean(str(row.get('Rozdzielnica źródłowa', '') or ''))
+        target = _clean(str(row.get('Odbiornik / rozdzielnica docelowa', '') or ''))
+        files = []
+        count = 0
+        aliases = set()
+        errors = []
+        if key:
+            for filename, found in found_by_file.items():
+                if '__error__' in found:
+                    errors.append(f'{filename}: {found["__error__"]}')
+                    continue
+                item = found.get(key)
+                if item:
+                    files.append(filename)
+                    count += item['count']
+                    aliases.update(item['labels'])
+        if not key:
+            status = 'Brak oznaczenia w liście'
+            note = 'Uzupełnij oznaczenie na podstawie schematu rozdzielnicy; program nie zgaduje.'
+        elif files:
+            status = 'Znaleziono w plikach'
+            note = 'Oznaczenie znalezione dokładnie po normalizacji; sprawdź, czy pliki dotyczą tej samej rozdzielnicy/kondygnacji.'
+        else:
+            status = 'Nie znaleziono'
+            note = 'Nie znaleziono dokładnego oznaczenia w przesłanych DXF. Sprawdź schemat, rzut i atrybuty bloków.'
+        if errors:
+            note += ' Błędy odczytu: ' + '; '.join(errors)
+        rows.append({
+            'Indeks pozycji': idx, 'Rozdzielnica źródłowa': source,
+            'Odbiornik / rozdzielnica docelowa': target, 'Oznaczenie obwodu': label,
+            'Pliki z oznaczeniem': ', '.join(files), 'Liczba wystąpień': count,
+            'Status dopasowania': status,
+            'Uwagi': note + (('; warianty zapisu: ' + ', '.join(sorted(aliases))) if aliases else ''),
+        })
+    return pd.DataFrame(rows, columns=cols)
+
+
 def _route_network_type(layer: str) -> str:
     """Classify a route layer conservatively so electrical and telecom networks never merge."""
     value = str(layer or "").casefold()
