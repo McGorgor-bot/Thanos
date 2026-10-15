@@ -97,7 +97,7 @@ def test_unknown_dxf_units_do_not_produce_lengths():
 
 def test_circuit_parser_recognizes_slash_style_ids():
     rows = _records_from_text(
-        "TP1/S13 — N2XH-J 5x2,5\\nTP1/S14 — N2XH-J 5x4",
+        "TP1/S13 — N2XH-J 5x2,5\nTP1/S14 — N2XH-J 5x4",
         "schemat.pdf", "str. 1"
     )
     assert [row["Oznaczenie obwodu"] for row in rows] == ["TP1/S13", "TP1/S14"]
