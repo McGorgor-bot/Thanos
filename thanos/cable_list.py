@@ -1357,9 +1357,14 @@ def estimate_cable_paths_without_route_layers(
 
         for (ns, nc), item in grouped.items():
             circuit_points = label_points.get(nc, [])
+            circuit_labels_found = bool(circuit_points)
             # Backward-compatible fallback for legacy rows whose destination labels
             # are named individually and whose circuit label is not on the plan.
             if not circuit_points:
+                # Legacy endpoint-to-endpoint estimation requires a unique source;
+                # never silently accept an ambiguous duplicate source label.
+                if ns and len(label_points.get(ns, [])) != 1:
+                    continue
                 fallback = []
                 for target in dict.fromkeys(item['targets']):
                     found = label_points.get(norm(target), [])
