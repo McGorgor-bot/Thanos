@@ -1441,7 +1441,7 @@ def estimate_cable_paths_without_route_layers(
                 'Odcinek poza trasą [m]': round(source_drop + receiver_drops, 3),
                 'Długość orientacyjna z zapasem [m]': round(total_with_reserve, 3),
                 'Plik źródłowy': name,
-                'Status': 'Szacunek wspólnego przebiegu — niepotwierdzony',
+                'Status': ('Szacunek wspólnego przebiegu — niepotwierdzony' if circuit_labels_found else 'Szacunek — niepotwierdzony'),
                 'Uwagi': (
                     f'Obwód {item["circuit"]}: {receiver_count} unikalnych lokalizacji etykiety, '
                     f'{len(clusters)} grup przestrzennych. Wspólne odcinki policzono raz metodą '
