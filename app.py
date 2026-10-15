@@ -26,7 +26,7 @@ from thanos.state import _file_content_cache_key
 from thanos.export import export_xlsx, apply_legend_names_to_results, project_json, build_route_measurement_exports
 from thanos.ath import load_excel as ath_load_excel, parse_ath_template, suggest_mapping, generate_ath, catalog_dataframe
 from thanos.ui_state import resolve_active_module
-from thanos.cable_list import CABLE_COLUMNS, extract_cable_candidates, export_cable_list_xlsx, measure_dxf_cable_routes, measure_cablofil_csv_routes, import_cable_list_table, suggest_cable_route_matches, estimate_cable_paths_without_route_layers
+from thanos.cable_list import CABLE_COLUMNS, extract_cable_candidates, export_cable_list_xlsx, measure_dxf_cable_routes, measure_cablofil_csv_routes, import_cable_list_table, suggest_cable_route_matches, estimate_cable_paths_without_route_layers, audit_circuit_references
 from thanos.project_profile import inspect_dxf, inspect_pdf, build_profile
 from thanos.cablofil_geometry import analyze_cablofil_blocks
 
