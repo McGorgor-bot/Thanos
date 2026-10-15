@@ -1233,13 +1233,7 @@ def measure_dxf_cable_routes(uploaded_file, route_layers=None, snap_tolerance_mm
 
 
 def _manhattan_shared_tree_length(points):
-    """Return the length of a minimum Manhattan spanning tree in drawing units.
-
-    A circuit with multiple receivers is one shared cable run. This estimates a
-    shared orthogonal tree, not one independent source-to-receiver run per label.
-    The result is deliberately marked as an estimate because walls, corridors,
-    obstacles and actual branch topology are not encoded by this point set.
-    """
+    """Length of a minimum Manhattan spanning tree in drawing units."""
     points = list(dict.fromkeys((float(x), float(y)) for x, y in points))
     if len(points) < 2:
         return 0.0
@@ -1258,18 +1252,41 @@ def _manhattan_shared_tree_length(points):
     return total
 
 
+def _cluster_circuit_points(points, max_gap_units):
+    """Split repeated circuit labels into spatially separate plan/view clusters."""
+    points = list(points)
+    parent = list(range(len(points)))
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+    for i, (x, y, _label) in enumerate(points):
+        for j in range(i):
+            px, py, _ = points[j]
+            if math.hypot(x - px, y - py) <= max_gap_units:
+                union(i, j)
+    groups = {}
+    for i, point in enumerate(points):
+        groups.setdefault(find(i), []).append(point)
+    return list(groups.values())
+
+
 def estimate_cable_paths_without_route_layers(
     uploaded_files, cables: pd.DataFrame, unit_override="auto",
     room_height=3.0, source_height=0.3, device_height=2.0, reserve_pct=10.0,
 ) -> pd.DataFrame:
-    """Estimate one shared cable path per circuit from repeated circuit labels.
+    """Estimate a shared cable route per circuit from repeated circuit labels.
 
-    Exact circuit labels (e.g. ``TP1/S13``) are treated as receiver/branch
-    locations. All unique locations for a circuit are joined to its source board
-    using a minimum Manhattan spanning tree, so common cable runs are counted
-    once instead of summing independent source-to-each-receiver distances.
-    This is only a preliminary estimate; it cannot infer corridor topology or
-    prove that a cable can physically follow the proposed path.
+    Repeated labels such as TP1/S13 represent multiple receivers on one circuit.
+    Their common run is estimated once with a Manhattan spanning tree, not as a
+    separate source-to-each-receiver length. Spatially separated plan views are
+    clustered so model-space placement of separate plans does not create a huge
+    artificial connection. The result remains an unconfirmed estimate.
     """
     import ezdxf
     import unicodedata
@@ -1281,9 +1298,9 @@ def estimate_cable_paths_without_route_layers(
 
     cols = [
         'Indeks pozycji', 'Indeksy pozycji', 'Rozdzielnica źródłowa',
-        'Oznaczenie obwodu', 'Liczba odbiorników', 'Długość trasy [m]',
-        'Odcinek poza trasą [m]', 'Długość orientacyjna z zapasem [m]',
-        'Plik źródłowy', 'Status', 'Uwagi',
+        'Oznaczenie obwodu', 'Liczba odbiorników', 'Liczba grup przestrzennych',
+        'Długość trasy [m]', 'Odcinek poza trasą [m]',
+        'Długość orientacyjna z zapasem [m]', 'Plik źródłowy', 'Status', 'Uwagi',
     ]
     if cables is None or cables.empty or not uploaded_files:
         return pd.DataFrame(columns=cols)
@@ -1291,18 +1308,26 @@ def estimate_cable_paths_without_route_layers(
     override_map = {'mm': 0.001, 'millimeter': 0.001, 'millimeters': 0.001,
                     'cm': 0.01, 'centimeter': 0.01, 'centimeters': 0.01,
                     'm': 1.0, 'meter': 1.0, 'meters': 1.0}
-    results = []
     grouped = {}
     for idx, row in cables.iterrows():
         source = _clean(str(row.get('Rozdzielnica źródłowa', '') or ''))
         circuit = _clean(str(row.get('Oznaczenie obwodu', '') or ''))
         ns, nc = norm(source), norm(circuit)
-        if ns and nc and ns != nc:
-            grouped.setdefault((ns, nc), {'source': source, 'circuit': circuit, 'indices': [], 'targets': []})['indices'].append(idx)
-            target = _clean(str(row.get('Odbiornik / rozdzielnica docelowa', '') or ''))
-            if target:
-                grouped[(ns, nc)]['targets'].append(target)
+        if not nc:
+            continue
+        # Infer the source from the circuit prefix only if the source field is empty.
+        if not ns and '/' in circuit:
+            source = circuit.split('/', 1)[0].strip()
+            ns = norm(source)
+        item = grouped.setdefault((ns, nc), {
+            'source': source, 'circuit': circuit, 'indices': [], 'targets': []
+        })
+        item['indices'].append(idx)
+        target = _clean(str(row.get('Odbiornik / rozdzielnica docelowa', '') or ''))
+        if target:
+            item['targets'].append(target)
 
+    results = []
     for uploaded in uploaded_files:
         name = getattr(uploaded, 'name', 'plan.dxf')
         if Path(name).suffix.lower() != '.dxf':
@@ -1331,64 +1356,87 @@ def estimate_cable_paths_without_route_layers(
             label_points.setdefault(key, []).append((float(pt.x), float(pt.y), text))
 
         for (ns, nc), item in grouped.items():
-            source_points = label_points.get(ns, [])
-            receiver_points = label_points.get(nc, [])
-            circuit_labels_found = bool(receiver_points)
-            # Backward-compatible fallback: older lists may contain only explicit
-            # destination labels, without circuit labels drawn on the plan.
-            if not receiver_points:
-                target_points = []
-                for target in dict.fromkeys(item.get('targets', [])):
-                    matches = label_points.get(norm(target), [])
-                    if len(matches) != 1:
-                        target_points = []
+            circuit_points = label_points.get(nc, [])
+            # Backward-compatible fallback for legacy rows whose destination labels
+            # are named individually and whose circuit label is not on the plan.
+            if not circuit_points:
+                fallback = []
+                for target in dict.fromkeys(item['targets']):
+                    found = label_points.get(norm(target), [])
+                    if len(found) != 1:
+                        fallback = []
                         break
-                    target_points.append(matches[0])
-                receiver_points = target_points
-            # Source must be unambiguous. Circuit labels may repeat by design.
-            if len(source_points) != 1 or not receiver_points:
+                    fallback.extend(found)
+                circuit_points = fallback
+            if not circuit_points:
                 continue
-            sx, sy, source_label = source_points[0]
-            unique_receivers = []
-            for x, y, label in sorted(receiver_points, key=lambda p: (p[0], p[1])):
-                if math.hypot(x - sx, y - sy) <= 250:
-                    continue
-                if not any(math.hypot(x - px, y - py) <= 250 for px, py, _ in unique_receivers):
-                    unique_receivers.append((x, y, label))
-            if not unique_receivers:
+
+            # Collapse duplicate text objects at virtually the same position.
+            point_tol = max(1e-6, 0.25 / factor)
+            unique_points = []
+            for x, y, label in sorted(circuit_points, key=lambda p: (p[0], p[1])):
+                if not any(math.hypot(x-px, y-py) <= point_tol for px, py, _ in unique_points):
+                    unique_points.append((x, y, label))
+            if not unique_points:
                 continue
-            points = [(sx, sy)] + [(x, y) for x, y, _ in unique_receivers]
-            route_m = _manhattan_shared_tree_length(points) * factor
-            if route_m <= 0:
-                continue
-            receiver_count = len(unique_receivers)
-            extra_receiver_drops = max(0.0, float(room_height) - float(device_height)) * max(0, receiver_count - 1)
-            source_drop = max(0.0, float(room_height) - float(source_height))
-            one_receiver_drop = max(0.0, float(room_height) - float(device_height))
-            total_with_reserve = (route_m + extra_receiver_drops + source_drop + one_receiver_drop) * (1 + float(reserve_pct) / 100.0)
+
+            source_points = label_points.get(ns, []) if ns else []
+            source_point = source_points[0] if len(source_points) == 1 else None
+            # A source label far from all receiver labels is often on another
+            # model-space plan; never connect separated plan views with a fake run.
+            max_source_gap = 20.0 / factor
+            source_linked = bool(source_point and min(
+                math.hypot(source_point[0]-x, source_point[1]-y) for x, y, _ in unique_points
+            ) <= max_source_gap)
+
+            # Plans in one DXF may be laid out far apart in Model Space. Estimate
+            # each local cluster independently and sum only local route trees.
+            clusters = _cluster_circuit_points(unique_points, 15.0 / factor)
+            route_units = 0.0
+            linked_clusters = 0
+            for cluster in clusters:
+                points = [(x, y) for x, y, _ in cluster]
+                if source_linked and source_point and min(
+                    math.hypot(source_point[0]-x, source_point[1]-y) for x, y, _ in cluster
+                ) <= max_source_gap:
+                    points.append((source_point[0], source_point[1]))
+                    linked_clusters += 1
+                route_units += _manhattan_shared_tree_length(points)
+
+            route_m = route_units * factor
+            receiver_count = len(unique_points)
+            source_drop = max(0.0, float(room_height) - float(source_height)) if source_linked else 0.0
+            receiver_drops = max(0.0, float(room_height) - float(device_height)) * receiver_count
+            total_with_reserve = (route_m + source_drop + receiver_drops) * (1 + float(reserve_pct) / 100.0)
+            source_note = (
+                f'Rozdzielnica {item["source"]} została połączona geometrycznie z {linked_clusters} grupą/grupami.'
+                if source_linked else
+                f'Nie znaleziono jednoznacznej etykiety źródła {item["source"]!r} w odległości do 20 m od oznaczeń obwodu; pion źródłowy i połączenie między oddalonymi rzutami nie zostały dopisane.'
+            )
             results.append({
                 'Indeks pozycji': item['indices'][0],
                 'Indeksy pozycji': json.dumps(item['indices'], ensure_ascii=False),
                 'Rozdzielnica źródłowa': item['source'],
                 'Oznaczenie obwodu': item['circuit'],
                 'Liczba odbiorników': receiver_count,
+                'Liczba grup przestrzennych': len(clusters),
                 'Długość trasy [m]': round(route_m, 3),
-                'Odcinek poza trasą [m]': round(extra_receiver_drops, 3),
+                'Odcinek poza trasą [m]': round(source_drop + receiver_drops, 3),
                 'Długość orientacyjna z zapasem [m]': round(total_with_reserve, 3),
                 'Plik źródłowy': name,
-                'Status': ('Szacunek wspólnego przebiegu — niepotwierdzony' if circuit_labels_found else 'Szacunek — niepotwierdzony'),
+                'Status': 'Szacunek wspólnego przebiegu — niepotwierdzony',
                 'Uwagi': (
-                    f'Obwód {item["circuit"]}: wspólna ortogonalna sieć od {source_label} do '
-                    f'{receiver_count} unikalnych lokalizacji etykiety. Długość wspólnej trasy '
-                    f'policzona raz metodą drzewa Manhattan; dodatkowe piony odbiorników '
-                    f'{extra_receiver_drops:.2f} m; pion źródłowy {source_drop:.2f} m; '
-                    f'zapas {float(reserve_pct):g}%. Szacunek nie uwzględnia rzeczywistego przebiegu '
-                    'korytarzami, przeszkód ani dokładnej topologii rozgałęzień — sprawdzić na rzucie.'
+                    f'Obwód {item["circuit"]}: {receiver_count} unikalnych lokalizacji etykiety, '
+                    f'{len(clusters)} grup przestrzennych. Wspólne odcinki policzono raz metodą '
+                    f'drzewa Manhattan; piony: źródło {source_drop:.2f} m, odbiorniki '
+                    f'{receiver_drops:.2f} m; zapas {float(reserve_pct):g}%. {source_note} '
+                    'Szacunek nie odtwarza rzeczywistych korytarzy, przeszkód ani topologii rozgałęzień; '
+                    'zweryfikować na rzucie przed kosztorysowaniem.'
                 ),
             })
     result = pd.DataFrame(results, columns=cols)
     if not result.empty:
-        result = result.drop_duplicates(subset=['Rozdzielnica źródłowa', 'Oznaczenie obwodu'], keep='first')
+        result = result.drop_duplicates(subset=['Rozdzielnica źródłowa', 'Oznaczenie obwodu', 'Plik źródłowy'], keep='first')
     return result.reset_index(drop=True)
 
 
