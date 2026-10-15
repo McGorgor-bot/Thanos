@@ -1,0 +1,9 @@
+Thanos 2.64.39 — wspólne szacowanie długości obwodów
+
+- Powtarzające się etykiety obwodu (np. TP1/S13) są grupowane jako wiele lokalizacji jednego obwodu.
+- Długość wspólnego przebiegu jest szacowana jako drzewo Manhattan, aby nie sumować niezależnych tras od źródła do każdego odbiornika.
+- Oddalone grupy etykiet w Model Space są rozdzielane przestrzennie; program nie dodaje sztucznego połączenia między osobno rozmieszczonymi rzutami.
+- Uwzględniono wysokość pomieszczenia 3,0 m, zejście od źródła 0,3 m, podejście do odbiornika 2,0 m i 10% zapasu w kolumnie orientacyjnej.
+- Wyniki są oznaczone jako niepotwierdzone szacunki. Algorytm nie zna rzeczywistego przebiegu korytarzami, przeszkód ani dokładnej topologii rozgałęzień.
+- Dodano testy regresyjne: wspólny obwód z wieloma odbiornikami, rozdzielone grupy rzutów, niejednoznaczna rozdzielnica w trybie zgodności oraz nieznane jednostki DXF.
+- Zachowano oddzielny pomiar rzeczywistych tras i istniejący tryb zgodności z indywidualnymi etykietami odbiorników.
