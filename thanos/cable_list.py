@@ -1413,11 +1413,23 @@ def estimate_cable_paths_without_route_layers(
             source_drop = max(0.0, float(room_height) - float(source_height)) if source_linked else 0.0
             receiver_drops = max(0.0, float(room_height) - float(device_height)) * receiver_count
             total_with_reserve = (route_m + source_drop + receiver_drops) * (1 + float(reserve_pct) / 100.0)
-            source_note = (
-                f'Rozdzielnica {item["source"]} została połączona geometrycznie z {linked_clusters} grupą/grupami.'
-                if source_linked else
-                f'Nie znaleziono jednoznacznej etykiety źródła {item["source"]!r} w odległości do 20 m od oznaczeń obwodu; pion źródłowy i połączenie między oddalonymi rzutami nie zostały dopisane.'
-            )
+            if source_linked:
+                source_note = (
+                    f'Rozdzielnica {item["source"]} została połączona geometrycznie z '
+                    f'{linked_clusters} grupą/grupami.'
+                )
+                if linked_clusters < len(clusters):
+                    source_note += (
+                        f' Pozostałe {len(clusters) - linked_clusters} oddalone grupy '
+                        'oszacowano lokalnie; nie zostały połączone sztucznym odcinkiem '
+                        'z rozdzielnicą.'
+                    )
+            else:
+                source_note = (
+                    f'Nie znaleziono jednoznacznej etykiety źródła {item["source"]!r} '
+                    'w odległości do 20 m od oznaczeń obwodu; pion źródłowy i połączenie '
+                    'między oddalonymi rzutami nie zostały dopisane.'
+                )
             results.append({
                 'Indeks pozycji': item['indices'][0],
                 'Indeksy pozycji': json.dumps(item['indices'], ensure_ascii=False),
