@@ -585,18 +585,28 @@ if st.session_state.get('ui_page') == 'cables':
         with _p4:
             _reserve_pct = st.number_input('Zapas kabla [%]', min_value=0.0, max_value=100.0, value=float(st.session_state.get('cable_reserve_pct', 10.0)), step=1.0, key='cable_reserve_pct')
         st.caption('Parametry domyślne: pomieszczenie 3,0 m, wyjście z rozdzielnicy 0,3 m, odbiornik 2,0 m, zapas 10%. Wzór: (długość trasy + odcinek poza trasą + max(0, wysokość pomieszczenia − wysokość wyjścia) + max(0, wysokość pomieszczenia − wysokość odbiornika)) × (1 + zapas%). Wspólna trasa jest liczona raz; ilość materiału wylicza się osobno według liczby kabli równoległych.')
-        st.markdown('#### Lista kablowa — edycja i weryfikacja')
-        _edited_cables = st.data_editor(_cable_df.reindex(columns=CABLE_COLUMNS), key='cable_list_editor', use_container_width=True, hide_index=True, num_rows='dynamic',
-            column_config={
-                'Rozdzielnica źródłowa': st.column_config.TextColumn('Rozdzielnica źródłowa', help='Wpisz nazwę rozdzielnicy źródłowej.'),
-                'Odbiornik / rozdzielnica docelowa': st.column_config.TextColumn('Odbiornik / rozdzielnica docelowa', help='Wpisz odbiornik lub rozdzielnicę docelową.'),
-                'Oznaczenie obwodu': st.column_config.TextColumn('Oznaczenie obwodu', help='Wpisz oznaczenie obwodu, np. WL-01.'),
-                'Liczba równoległych kabli': st.column_config.NumberColumn(min_value=1, step=1),
-                'Długość trasy [m]': st.column_config.NumberColumn('Długość trasy [m]', min_value=0.0, step=0.5, help='Długość zmierzona po trasie kablowej na rzucie.'),
-                'Odcinek poza trasą [m]': st.column_config.NumberColumn('Odcinek poza trasą [m]', min_value=0.0, step=0.5, help='Odcinek prowadzony sufitem poza korytem/trasa.'),
-                'Długość [m]': st.column_config.NumberColumn(min_value=0, step=0.1),
-                'Status weryfikacji': st.column_config.SelectboxColumn(options=['Do weryfikacji','Potwierdzono na schemacie','Wymaga wyjaśnienia']),
-            })
+        st.markdown('#### Lista kablowa')
+        _primary_cols = [c for c in ['Oznaczenie obwodu', 'Rozdzielnica źródłowa', 'Odbiornik / rozdzielnica docelowa', 'Typ kabla', 'Liczba równoległych kabli', 'Długość [m]', 'Status weryfikacji'] if c in _cable_df.columns]
+        st.dataframe(_cable_df.reindex(columns=_primary_cols), use_container_width=True, hide_index=True)
+        with st.expander('✏️ Edycja szczegółowa i pola techniczne', expanded=False):
+            st.caption('Tutaj możesz edytować wszystkie pola, w tym długości tras, odcinki poza trasą, źródło, warstwę i uwagi. Eksport zachowuje pełny zestaw danych.')
+            _edited_cables = st.data_editor(_cable_df.reindex(columns=CABLE_COLUMNS), key='cable_list_editor', use_container_width=True, hide_index=True, num_rows='dynamic',
+                column_config={
+                    'Rozdzielnica źródłowa': st.column_config.TextColumn('Rozdzielnica źródłowa', help='Wpisz nazwę rozdzielnicy źródłowej.'),
+                    'Odbiornik / rozdzielnica docelowa': st.column_config.TextColumn('Odbiornik / rozdzielnica docelowa', help='Wpisz odbiornik lub rozdzielnicę docelową.'),
+                    'Oznaczenie obwodu': st.column_config.TextColumn('Oznaczenie obwodu', help='Wpisz oznaczenie obwodu, np. WL-01.'),
+                    'Liczba równoległych kabli': st.column_config.NumberColumn(min_value=1, step=1),
+                    'Długość trasy [m]': st.column_config.NumberColumn('Długość trasy [m]', min_value=0.0, step=0.5, help='Długość zmierzona po trasie kablowej na rzucie.'),
+                    'Odcinek poza trasą [m]': st.column_config.NumberColumn('Odcinek poza trasą [m]', min_value=0.0, step=0.5, help='Odcinek prowadzony sufitem poza korytem/trasa.'),
+                    'Długość [m]': st.column_config.NumberColumn(min_value=0, step=0.1),
+                    'Status weryfikacji': st.column_config.SelectboxColumn(options=['Do weryfikacji','Potwierdzono na schemacie','Wymaga wyjaśnienia']),
+                })
+        if 'cable_list_editor' in st.session_state:
+            _edited_cables = st.session_state['cable_list_editor']
+            if not isinstance(_edited_cables, pd.DataFrame):
+                _edited_cables = _cable_df
+        else:
+            _edited_cables = _cable_df
         st.session_state['cable_list_edited_df'] = _edited_cables
         if st.button('Oblicz długości z parametrów', key='cable_calc_lengths', use_container_width=True):
             _calc = _edited_cables.copy()
