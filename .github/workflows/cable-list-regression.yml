@@ -59,9 +59,9 @@ jobs:
           row = {column: "" for column in CABLE_COLUMNS}
           row["Oznaczenie obwodu"] = "TEST-WL-CSV"
           csv_bytes = pd.DataFrame([row], columns=CABLE_COLUMNS).to_csv(
-              index=False, sep=";", encoding="utf-8-sig", lineterminator="\\n"
+              index=False, sep=";", encoding="utf-8-sig", lineterminator=chr(10)
           ).encode("utf-8-sig")
-          assert csv_bytes.startswith(b"\\xef\\xbb\\xbf")
+          assert csv_bytes.startswith(bytes([239, 187, 191]))
           text = csv_bytes.decode("utf-8-sig")
           assert ";" in text.splitlines()[0]
           assert "TEST-WL-CSV" in text
