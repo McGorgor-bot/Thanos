@@ -794,7 +794,9 @@ def analyze_pdf(name, data, patterns, mode='Hybrydowa', ocr_lang='pol+eng', lege
                     'Symbol/etykieta': symbol, 'Ilość': qty, 'Metoda': method,
                     'Pewność': certainty, 'Źródło': source,
                 })
-        statuses.append(f'Strona {pg["page"]}: {"OCR + tekst" if ocr_used and source == "PDF/tekst+OCR" else source}; znaków tekstu {len(re.sub(r"\\s+", "", pg["text"]))}')
+        _text_char_count = len(re.sub(r"\s+", "", pg["text"]))
+        _text_source_label = "OCR + tekst" if ocr_used and source == "PDF/tekst+OCR" else source
+        statuses.append(f'Strona {pg["page"]}: {_text_source_label}; znaków tekstu {_text_char_count}')
     if legend_only and global_legend_labels:
         statuses.insert(0, f'Legenda PDF: znaleziono {len(global_legend_labels)} unikalnych oznaczeń: {", ".join(sorted(global_legend_labels))}')
     elif legend_only:

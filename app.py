@@ -305,10 +305,13 @@ if st.session_state.get('ui_page') == 'profile':
 if st.session_state.get('ui_page') == 'cables':
     st.markdown('<div class="th-section-title">⌁ &nbsp; Lista kablowa ze schematów rozdzielnic</div>', unsafe_allow_html=True)
     st.markdown('<div class="th-help">Wczytaj schematy PDF lub DWG/DXF. Thanos wyszukuje oznaczenia kabli i tworzy roboczą listę do weryfikacji. Długości tras nie są zgadywane — uzupełnij je na podstawie pomiarów.</div>', unsafe_allow_html=True)
+    st.markdown('#### 1. Wybierz sposób pracy')
+    st.caption('Masz już listę? Wczytaj ją poniżej. Zaczynasz od zera? Dodaj rysunki i rozpoznaj oznaczenia kabli.')
     staged = st.session_state.get('cable_handoff_files', []) or []
     if staged:
         st.success('Przekazano pliki z istniejącego modułu: ' + ', '.join(getattr(f, 'name', 'plik') for f in staged))
-    _existing_list_upload = st.file_uploader('Importuj istniejącą listę kablową (XLSX / XLS / CSV)', type=['xlsx','xls','csv'], accept_multiple_files=False, key='cable_existing_list_upload')
+    st.markdown('**A. Mam już listę kablową**')
+    _existing_list_upload = st.file_uploader('Wybierz listę Excel lub CSV', type=['xlsx','xls','csv'], accept_multiple_files=False, key='cable_existing_list_upload')
     if _existing_list_upload is not None and st.button('📥 Wczytaj listę kablową z pliku', key='cable_existing_list_import', use_container_width=True):
         try:
             _imported_list = import_cable_list_table(_existing_list_upload.getvalue(), _existing_list_upload.name)
@@ -321,10 +324,11 @@ if st.session_state.get('ui_page') == 'cables':
             st.rerun()
         except Exception as _list_import_exc:
             st.error(f'Nie udało się wczytać listy kablowej: {type(_list_import_exc).__name__}: {_list_import_exc}')
-    uploaded = st.file_uploader('Dodaj schematy PDF / DWG / DXF', type=['pdf','dwg','dxf'], accept_multiple_files=True, key='cable_list_upload') or []
+    st.markdown('**B. Utwórz listę z rysunków**')
+    uploaded = st.file_uploader('Wybierz schematy PDF / DWG / DXF', type=['pdf','dwg','dxf'], accept_multiple_files=True, key='cable_list_upload') or []
 
     # Integrated project-profile workflow, available without leaving Lista kablowa.
-    with st.expander('⚙ Profil projektu — analiza rysunków i ustawienie pomiaru', expanded=True):
+    with st.expander('⚙ Ustawienia zaawansowane — profil projektu i pomiar tras', expanded=False):
         st.caption('Dodaj przede wszystkim rzuty tras w DXF oraz, pomocniczo, schematy rozdzielnic PDF. Thanos zaproponuje warstwy; przed zastosowaniem profilu zatwierdź wybór. Sam profil nie przypisuje automatycznie pełnych długości kabli do obwodów.')
         _inline_profile_files = st.file_uploader('Rysunki do rozpoznania profilu (PDF / DXF)', type=['pdf','dxf'], accept_multiple_files=True, key='cable_inline_profile_files') or []
         _inline_profile_cols = st.columns(3)
@@ -581,18 +585,22 @@ if st.session_state.get('ui_page') == 'cables':
         with _p4:
             _reserve_pct = st.number_input('Zapas kabla [%]', min_value=0.0, max_value=100.0, value=float(st.session_state.get('cable_reserve_pct', 10.0)), step=1.0, key='cable_reserve_pct')
         st.caption('Parametry domyślne: pomieszczenie 3,0 m, wyjście z rozdzielnicy 0,3 m, odbiornik 2,0 m, zapas 10%. Wzór: (długość trasy + odcinek poza trasą + max(0, wysokość pomieszczenia − wysokość wyjścia) + max(0, wysokość pomieszczenia − wysokość odbiornika)) × (1 + zapas%). Wspólna trasa jest liczona raz; ilość materiału wylicza się osobno według liczby kabli równoległych.')
-        st.markdown('#### Lista kablowa — edycja i weryfikacja')
-        _edited_cables = st.data_editor(_cable_df.reindex(columns=CABLE_COLUMNS), key='cable_list_editor', use_container_width=True, hide_index=True, num_rows='dynamic',
-            column_config={
-                'Rozdzielnica źródłowa': st.column_config.TextColumn('Rozdzielnica źródłowa', help='Wpisz nazwę rozdzielnicy źródłowej.'),
-                'Odbiornik / rozdzielnica docelowa': st.column_config.TextColumn('Odbiornik / rozdzielnica docelowa', help='Wpisz odbiornik lub rozdzielnicę docelową.'),
-                'Oznaczenie obwodu': st.column_config.TextColumn('Oznaczenie obwodu', help='Wpisz oznaczenie obwodu, np. WL-01.'),
-                'Liczba równoległych kabli': st.column_config.NumberColumn(min_value=1, step=1),
-                'Długość trasy [m]': st.column_config.NumberColumn('Długość trasy [m]', min_value=0.0, step=0.5, help='Długość zmierzona po trasie kablowej na rzucie.'),
-                'Odcinek poza trasą [m]': st.column_config.NumberColumn('Odcinek poza trasą [m]', min_value=0.0, step=0.5, help='Odcinek prowadzony sufitem poza korytem/trasa.'),
-                'Długość [m]': st.column_config.NumberColumn(min_value=0, step=0.1),
-                'Status weryfikacji': st.column_config.SelectboxColumn(options=['Do weryfikacji','Potwierdzono na schemacie','Wymaga wyjaśnienia']),
-            })
+        st.markdown('#### Lista kablowa')
+        _primary_cols = [c for c in ['Oznaczenie obwodu', 'Rozdzielnica źródłowa', 'Odbiornik / rozdzielnica docelowa', 'Typ kabla', 'Liczba równoległych kabli', 'Długość [m]', 'Status weryfikacji'] if c in _cable_df.columns]
+        st.dataframe(_cable_df.reindex(columns=_primary_cols), use_container_width=True, hide_index=True)
+        with st.expander('✏️ Edycja szczegółowa i pola techniczne', expanded=False):
+            st.caption('Tutaj możesz edytować wszystkie pola, w tym długości tras, odcinki poza trasą, źródło, warstwę i uwagi. Eksport zachowuje pełny zestaw danych.')
+            _edited_cables = st.data_editor(_cable_df.reindex(columns=CABLE_COLUMNS), key='cable_list_editor', use_container_width=True, hide_index=True, num_rows='dynamic',
+                column_config={
+                    'Rozdzielnica źródłowa': st.column_config.TextColumn('Rozdzielnica źródłowa', help='Wpisz nazwę rozdzielnicy źródłowej.'),
+                    'Odbiornik / rozdzielnica docelowa': st.column_config.TextColumn('Odbiornik / rozdzielnica docelowa', help='Wpisz odbiornik lub rozdzielnicę docelową.'),
+                    'Oznaczenie obwodu': st.column_config.TextColumn('Oznaczenie obwodu', help='Wpisz oznaczenie obwodu, np. WL-01.'),
+                    'Liczba równoległych kabli': st.column_config.NumberColumn(min_value=1, step=1),
+                    'Długość trasy [m]': st.column_config.NumberColumn('Długość trasy [m]', min_value=0.0, step=0.5, help='Długość zmierzona po trasie kablowej na rzucie.'),
+                    'Odcinek poza trasą [m]': st.column_config.NumberColumn('Odcinek poza trasą [m]', min_value=0.0, step=0.5, help='Odcinek prowadzony sufitem poza korytem/trasa.'),
+                    'Długość [m]': st.column_config.NumberColumn(min_value=0, step=0.1),
+                    'Status weryfikacji': st.column_config.SelectboxColumn(options=['Do weryfikacji','Potwierdzono na schemacie','Wymaga wyjaśnienia']),
+                })
         st.session_state['cable_list_edited_df'] = _edited_cables
         if st.button('Oblicz długości z parametrów', key='cable_calc_lengths', use_container_width=True):
             _calc = _edited_cables.copy()
@@ -616,6 +624,8 @@ if st.session_state.get('ui_page') == 'cables':
             st.metric('Suma wpisanych długości', f'{_lengths.sum():g} m' if _lengths.notna().any() else 'Nie uzupełniono')
         _xlsx_cables = export_cable_list_xlsx(_edited_cables)
         st.download_button('⬇ Pobierz listę kablową XLSX', data=_xlsx_cables, file_name=_xlsx_filename('Lista_kablowa'), mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', use_container_width=True, key='download_cable_list_xlsx')
+        _csv_cables = _edited_cables.reindex(columns=CABLE_COLUMNS).to_csv(index=False, sep=';', encoding='utf-8-sig', lineterminator='\n').encode('utf-8-sig')
+        st.download_button('⬇ Pobierz listę kablową CSV', data=_csv_cables, file_name=_xlsx_filename('Lista_kablowa').rsplit('.', 1)[0] + '.csv', mime='text/csv; charset=utf-8', use_container_width=True, key='download_cable_list_csv')
         if st.button('Wyczyść listę kablową', key='clear_cable_list'):
             st.session_state.pop('cable_list_df', None); st.session_state.pop('cable_list_edited_df', None); st.session_state.pop('cable_list_errors', None); st.session_state.pop('cable_route_estimates', None)
             st.rerun()
