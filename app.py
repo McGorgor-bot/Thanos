@@ -311,7 +311,7 @@ if st.session_state.get('ui_page') == 'cables':
     if staged:
         st.success('Przekazano pliki z istniejącego modułu: ' + ', '.join(getattr(f, 'name', 'plik') for f in staged))
     st.markdown('**A. Mam już listę kablową**')
-    _existing_list_upload = st.file_uploader('Wybierz listę Excel lub CSV',, type=['xlsx','xls','csv'], accept_multiple_files=False, key='cable_existing_list_upload')
+    _existing_list_upload = st.file_uploader('Wybierz listę Excel lub CSV', type=['xlsx','xls','csv'], accept_multiple_files=False, key='cable_existing_list_upload')
     if _existing_list_upload is not None and st.button('📥 Wczytaj listę kablową z pliku', key='cable_existing_list_import', use_container_width=True):
         try:
             _imported_list = import_cable_list_table(_existing_list_upload.getvalue(), _existing_list_upload.name)
