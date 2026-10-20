@@ -324,7 +324,7 @@ if st.session_state.get('ui_page') == 'cables':
     uploaded = st.file_uploader('Dodaj schematy PDF / DWG / DXF', type=['pdf','dwg','dxf'], accept_multiple_files=True, key='cable_list_upload') or []
 
     # Integrated project-profile workflow, available without leaving Lista kablowa.
-    with st.expander('⚙ Profil projektu — analiza rysunków i ustawienie pomiaru', expanded=True):
+    with st.expander('⚙ Ustawienia zaawansowane — profil projektu i pomiar tras', expanded=False):
         st.caption('Dodaj przede wszystkim rzuty tras w DXF oraz, pomocniczo, schematy rozdzielnic PDF. Thanos zaproponuje warstwy; przed zastosowaniem profilu zatwierdź wybór. Sam profil nie przypisuje automatycznie pełnych długości kabli do obwodów.')
         _inline_profile_files = st.file_uploader('Rysunki do rozpoznania profilu (PDF / DXF)', type=['pdf','dxf'], accept_multiple_files=True, key='cable_inline_profile_files') or []
         _inline_profile_cols = st.columns(3)
