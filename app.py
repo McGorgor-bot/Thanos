@@ -305,10 +305,13 @@ if st.session_state.get('ui_page') == 'profile':
 if st.session_state.get('ui_page') == 'cables':
     st.markdown('<div class="th-section-title">⌁ &nbsp; Lista kablowa ze schematów rozdzielnic</div>', unsafe_allow_html=True)
     st.markdown('<div class="th-help">Wczytaj schematy PDF lub DWG/DXF. Thanos wyszukuje oznaczenia kabli i tworzy roboczą listę do weryfikacji. Długości tras nie są zgadywane — uzupełnij je na podstawie pomiarów.</div>', unsafe_allow_html=True)
+    st.markdown('#### 1. Wybierz sposób pracy')
+    st.caption('Masz już listę? Wczytaj ją poniżej. Zaczynasz od zera? Dodaj rysunki i rozpoznaj oznaczenia kabli.')
     staged = st.session_state.get('cable_handoff_files', []) or []
     if staged:
         st.success('Przekazano pliki z istniejącego modułu: ' + ', '.join(getattr(f, 'name', 'plik') for f in staged))
-    _existing_list_upload = st.file_uploader('Importuj istniejącą listę kablową (XLSX / XLS / CSV)', type=['xlsx','xls','csv'], accept_multiple_files=False, key='cable_existing_list_upload')
+    st.markdown('**A. Mam już listę kablową**')
+    _existing_list_upload = st.file_uploader('Wybierz listę Excel lub CSV',, type=['xlsx','xls','csv'], accept_multiple_files=False, key='cable_existing_list_upload')
     if _existing_list_upload is not None and st.button('📥 Wczytaj listę kablową z pliku', key='cable_existing_list_import', use_container_width=True):
         try:
             _imported_list = import_cable_list_table(_existing_list_upload.getvalue(), _existing_list_upload.name)
@@ -321,7 +324,8 @@ if st.session_state.get('ui_page') == 'cables':
             st.rerun()
         except Exception as _list_import_exc:
             st.error(f'Nie udało się wczytać listy kablowej: {type(_list_import_exc).__name__}: {_list_import_exc}')
-    uploaded = st.file_uploader('Dodaj schematy PDF / DWG / DXF', type=['pdf','dwg','dxf'], accept_multiple_files=True, key='cable_list_upload') or []
+    st.markdown('**B. Utwórz listę z rysunków**')
+    uploaded = st.file_uploader('Wybierz schematy PDF / DWG / DXF', type=['pdf','dwg','dxf'], accept_multiple_files=True, key='cable_list_upload') or []
 
     # Integrated project-profile workflow, available without leaving Lista kablowa.
     with st.expander('⚙ Ustawienia zaawansowane — profil projektu i pomiar tras', expanded=False):
