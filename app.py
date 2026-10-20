@@ -624,6 +624,8 @@ if st.session_state.get('ui_page') == 'cables':
             st.metric('Suma wpisanych długości', f'{_lengths.sum():g} m' if _lengths.notna().any() else 'Nie uzupełniono')
         _xlsx_cables = export_cable_list_xlsx(_edited_cables)
         st.download_button('⬇ Pobierz listę kablową XLSX', data=_xlsx_cables, file_name=_xlsx_filename('Lista_kablowa'), mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', use_container_width=True, key='download_cable_list_xlsx')
+        _csv_cables = _edited_cables.reindex(columns=CABLE_COLUMNS).to_csv(index=False, sep=';', encoding='utf-8-sig', lineterminator='\\n').encode('utf-8-sig')
+        st.download_button('⬇ Pobierz listę kablową CSV', data=_csv_cables, file_name=_xlsx_filename('Lista_kablowa').rsplit('.', 1)[0] + '.csv', mime='text/csv; charset=utf-8', use_container_width=True, key='download_cable_list_csv')
         if st.button('Wyczyść listę kablową', key='clear_cable_list'):
             st.session_state.pop('cable_list_df', None); st.session_state.pop('cable_list_edited_df', None); st.session_state.pop('cable_list_errors', None); st.session_state.pop('cable_route_estimates', None)
             st.rerun()
