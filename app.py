@@ -601,12 +601,6 @@ if st.session_state.get('ui_page') == 'cables':
                     'Długość [m]': st.column_config.NumberColumn(min_value=0, step=0.1),
                     'Status weryfikacji': st.column_config.SelectboxColumn(options=['Do weryfikacji','Potwierdzono na schemacie','Wymaga wyjaśnienia']),
                 })
-        if 'cable_list_editor' in st.session_state:
-            _edited_cables = st.session_state['cable_list_editor']
-            if not isinstance(_edited_cables, pd.DataFrame):
-                _edited_cables = _cable_df
-        else:
-            _edited_cables = _cable_df
         st.session_state['cable_list_edited_df'] = _edited_cables
         if st.button('Oblicz długości z parametrów', key='cable_calc_lengths', use_container_width=True):
             _calc = _edited_cables.copy()
