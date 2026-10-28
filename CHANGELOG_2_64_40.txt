@@ -1,0 +1,8 @@
+Thanos 2.64.40 — audyt XREF i zgodności rysunków dla listy kablowej
+
+- Dodano tylko do odczytu raport jednostek $INSUNITS oraz wstawień XREF: punkt wstawienia, skale osi i obrót.
+- Dodano porównanie jednoznacznych wspólnych etykiet między DXF o zgodnych, znanych jednostkach. Wynik jest kandydatem do kontroli wymiarami; aplikacja nie przesuwa ani nie skaluje rysunków.
+- Doprecyzowano w module listy kablowej założenia 3,0 m / 0,3 m / 2,0 m / 10% oraz bezpośrednie przypisanie XX/XX do TP1.
+- Intersekcja geometrii nie jest traktowana jako połączenie. Szacunek bez tras jawnie informuje, że nie modeluje drzwi, otworów, korytarzy ani rozgałęzień.
+
+Kontrola wykonana: kompilacja składniowa zmodyfikowanych plików Python. Nie uruchamiano testów aplikacji.

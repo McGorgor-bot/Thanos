@@ -26,7 +26,7 @@ from thanos.state import _file_content_cache_key
 from thanos.export import export_xlsx, apply_legend_names_to_results, project_json, build_route_measurement_exports
 from thanos.ath import load_excel as ath_load_excel, parse_ath_template, suggest_mapping, generate_ath, catalog_dataframe
 from thanos.ui_state import resolve_active_module
-from thanos.cable_list import CABLE_COLUMNS, extract_cable_candidates, export_cable_list_xlsx, measure_dxf_cable_routes, measure_cablofil_csv_routes, import_cable_list_table, suggest_cable_route_matches, estimate_cable_paths_without_route_layers
+from thanos.cable_list import CABLE_COLUMNS, extract_cable_candidates, export_cable_list_xlsx, measure_dxf_cable_routes, measure_cablofil_csv_routes, import_cable_list_table, suggest_cable_route_matches, estimate_cable_paths_without_route_layers, audit_dxf_reference_alignment
 from thanos.project_profile import inspect_dxf, inspect_pdf, build_profile
 from thanos.cablofil_geometry import analyze_cablofil_blocks
 
@@ -305,10 +305,13 @@ if st.session_state.get('ui_page') == 'profile':
 if st.session_state.get('ui_page') == 'cables':
     st.markdown('<div class="th-section-title">⌁ &nbsp; Lista kablowa ze schematów rozdzielnic</div>', unsafe_allow_html=True)
     st.markdown('<div class="th-help">Wczytaj schematy PDF lub DWG/DXF. Thanos wyszukuje oznaczenia kabli i tworzy roboczą listę do weryfikacji. Długości tras nie są zgadywane — uzupełnij je na podstawie pomiarów.</div>', unsafe_allow_html=True)
+    st.markdown('#### 1. Wybierz sposób pracy')
+    st.caption('Masz już listę? Wczytaj ją poniżej. Zaczynasz od zera? Dodaj rysunki i rozpoznaj oznaczenia kabli.')
     staged = st.session_state.get('cable_handoff_files', []) or []
     if staged:
         st.success('Przekazano pliki z istniejącego modułu: ' + ', '.join(getattr(f, 'name', 'plik') for f in staged))
-    _existing_list_upload = st.file_uploader('Importuj istniejącą listę kablową (XLSX / XLS / CSV)', type=['xlsx','xls','csv'], accept_multiple_files=False, key='cable_existing_list_upload')
+    st.markdown('**A. Mam już listę kablową**')
+    _existing_list_upload = st.file_uploader('Wybierz listę Excel lub CSV', type=['xlsx','xls','csv'], accept_multiple_files=False, key='cable_existing_list_upload')
     if _existing_list_upload is not None and st.button('📥 Wczytaj listę kablową z pliku', key='cable_existing_list_import', use_container_width=True):
         try:
             _imported_list = import_cable_list_table(_existing_list_upload.getvalue(), _existing_list_upload.name)
@@ -321,10 +324,11 @@ if st.session_state.get('ui_page') == 'cables':
             st.rerun()
         except Exception as _list_import_exc:
             st.error(f'Nie udało się wczytać listy kablowej: {type(_list_import_exc).__name__}: {_list_import_exc}')
-    uploaded = st.file_uploader('Dodaj schematy PDF / DWG / DXF', type=['pdf','dwg','dxf'], accept_multiple_files=True, key='cable_list_upload') or []
+    st.markdown('**B. Utwórz listę z rysunków**')
+    uploaded = st.file_uploader('Wybierz schematy PDF / DWG / DXF', type=['pdf','dwg','dxf'], accept_multiple_files=True, key='cable_list_upload') or []
 
     # Integrated project-profile workflow, available without leaving Lista kablowa.
-    with st.expander('⚙ Profil projektu — analiza rysunków i ustawienie pomiaru', expanded=True):
+    with st.expander('⚙ Ustawienia zaawansowane — profil projektu i pomiar tras', expanded=False):
         st.caption('Dodaj przede wszystkim rzuty tras w DXF oraz, pomocniczo, schematy rozdzielnic PDF. Thanos zaproponuje warstwy; przed zastosowaniem profilu zatwierdź wybór. Sam profil nie przypisuje automatycznie pełnych długości kabli do obwodów.')
         _inline_profile_files = st.file_uploader('Rysunki do rozpoznania profilu (PDF / DXF)', type=['pdf','dxf'], accept_multiple_files=True, key='cable_inline_profile_files') or []
         _inline_profile_cols = st.columns(3)
@@ -443,8 +447,8 @@ if st.session_state.get('ui_page') == 'cables':
             st.session_state.pop('cable_list_editor', None)
             st.rerun()
         _cable_df = st.session_state.get('cable_list_edited_df', st.session_state.get('cable_list_df', pd.DataFrame(columns=CABLE_COLUMNS)))
-        st.markdown('#### Automatyczny pomiar tras z rzutu DXF')
-        st.caption('Wczytaj DXF z warstwami tras albo CSV diagnostyczny geometrii Cablofil. Graf łączy wyłącznie końce odcinków w tej samej klasie sieci; samo przecięcie linii nie tworzy połączenia. Sieci elektryczne i teletechniczne są rozdzielane. Gdy brak warstw tras, można dodatkowo uzyskać wyraźnie oznaczony szacunek po suficie między jednoznacznymi etykietami na tym samym rzucie.')
+        st.markdown('#### Automatyczny pomiar tras z rysunków DWG/DXF i PDF')
+        st.caption('DXF: łączy końce linii i polilinii w graf tras oraz dopasowuje etykiety przy węzłach. PDF: mierzy wektorowe linie tras z rozpoznanych oznaczeń/kolorów i skali; przypisanie do kabla bez jednoznacznych etykiet końcowych wymaga zatwierdzenia ręcznego. Przecięcie linii samo w sobie nie tworzy połączenia. Wynik niejednoznaczny nie jest przypisywany automatycznie.')
         _active_profile = st.session_state.get('thanos_project_profile', {}) or {}
         _profile_route_layers = [str(x) for x in _active_profile.get('warstwy_tras_kablowych', []) if str(x).strip()]
         _profile_device_layers = [str(x) for x in _active_profile.get('warstwy_urządzeń', []) if str(x).strip()]
@@ -452,9 +456,23 @@ if st.session_state.get('ui_page') == 'cables':
         _profile_unit = _profile_unit if _profile_unit in {'auto','mm','cm','m'} else 'auto'
         if _active_profile:
             st.info(f"Aktywny profil: {_active_profile.get('nazwa_projektu','bez nazwy')} · warstwy tras: {', '.join(_profile_route_layers) or 'brak — zostaną użyte warstwy domyślne'} · jednostki: {_profile_unit}")
-        _route_uploads = st.file_uploader('Rzuty tras kablowych (DXF) i/lub diagnostyka osi Cablofil (CSV) — można wybrać kilka plików', type=['dxf','csv'], accept_multiple_files=True, key='cable_route_dxf_uploads') or []
+        _route_uploads = st.file_uploader('Rzuty tras kablowych (DXF/PDF) i/lub diagnostyka osi Cablofil (CSV) — można wybrać kilka plików', type=['dxf','pdf','csv'], accept_multiple_files=True, key='cable_route_dxf_uploads') or []
         if _route_uploads:
-            st.caption('Wgraj razem rzuty wszystkich kondygnacji tego samego projektu. Schematy RG/TP1 pomagają ustalić końce kabla, ale nie są mierzone jako fizyczne trasy.')
+            st.caption('Wgraj rzuty wszystkich kondygnacji. DXF daje dokładniejszy graf połączeń. PDF musi być wektorowy i mieć czytelną skalę; rastrowy PDF lub brak skali nie daje wiarygodnego pomiaru automatycznego.')
+            if st.button('🔎 Sprawdź jednostki, XREF-y i wspólne etykiety', key='cable_dxf_alignment_audit', use_container_width=True):
+                try:
+                    _xref_report, _alignment_report = audit_dxf_reference_alignment(_route_uploads)
+                    st.session_state['cable_dxf_reference_report'] = _xref_report
+                    st.session_state['cable_dxf_alignment_report'] = _alignment_report
+                except Exception as _audit_exc:
+                    st.error(f'Nie udało się przeanalizować struktury DXF: {type(_audit_exc).__name__}: {_audit_exc}')
+            _xref_report = st.session_state.get('cable_dxf_reference_report', pd.DataFrame())
+            if isinstance(_xref_report, pd.DataFrame) and not _xref_report.empty:
+                st.dataframe(_xref_report, hide_index=True)
+                st.caption('Audyt jest tylko do odczytu. Różnice współrzędnych wspólnych etykiet są kandydatami do sprawdzenia wymiarami; nie powodują automatycznej zmiany położenia, skali ani obrotu.')
+            _alignment_report = st.session_state.get('cable_dxf_alignment_report', pd.DataFrame())
+            if isinstance(_alignment_report, pd.DataFrame) and not _alignment_report.empty:
+                st.dataframe(_alignment_report, hide_index=True)
         if st.button('📐 Zmierz trasy ze wszystkich plików', key='cable_route_measure', use_container_width=True, disabled=not _route_uploads):
             try:
                 _route_frames = []
@@ -464,6 +482,28 @@ if st.session_state.get('ui_page') == 'cables':
                         try:
                             if Path(_route_file.name).suffix.lower() == '.csv':
                                 _one_routes = measure_cablofil_csv_routes(_route_file)
+                            elif Path(_route_file.name).suffix.lower() == '.pdf':
+                                _pdf_bytes = _route_file.getvalue()
+                                _pdf_scale = detect_pdf_scale(_pdf_bytes, 100.0)
+                                _pdf_measured = measure_pdf_routes(
+                                    _pdf_bytes, scale_denominator=_pdf_scale, unit_scale=0.001,
+                                    group_by_labels=True,
+                                )
+                                if _pdf_measured.empty:
+                                    _one_routes = pd.DataFrame()
+                                else:
+                                    _pdf_measured = _pdf_measured.copy()
+                                    _pdf_measured['ID trasy'] = [f'PDF-{Path(_route_file.name).stem[:18]}-S{int(r.get("Strona", 1)):02d}-{i+1:03d}' for i, (_, r) in enumerate(_pdf_measured.iterrows())]
+                                    _pdf_measured['Liczba odcinków'] = _pdf_measured.get('Obiekty', 0)
+                                    _pdf_measured['Typ sieci'] = _pdf_measured.get('Trasa', 'Trasa z PDF')
+                                    _pdf_measured['Warstwy'] = 'PDF/wektory'
+                                    _pdf_measured['Etykiety w pobliżu'] = _pdf_measured.get('Oznaczenie', '')
+                                    _pdf_measured['Etykieta początku'] = ''
+                                    _pdf_measured['Etykieta końca'] = ''
+                                    _pdf_measured['Ścieżki między etykietami [JSON]'] = '{}'
+                                    _pdf_measured['Źródło'] = _route_file.name
+                                    _pdf_measured['Długość trasy [m]'] = pd.to_numeric(_pdf_measured.get('Długość [m]', 0), errors='coerce')
+                                    _one_routes = _pdf_measured.reindex(columns=['ID trasy','Długość [m]','Długość trasy [m]','Liczba odcinków','Typ sieci','Warstwy','Etykiety w pobliżu','Etykieta początku','Etykieta końca','Ścieżki między etykietami [JSON]','Źródło']).copy()
                             else:
                                 _one_routes = measure_dxf_cable_routes(
                                     _route_file,
@@ -478,6 +518,8 @@ if st.session_state.get('ui_page') == 'cables':
                         except Exception as _one_exc:
                             _route_errors.append(f'{_route_file.name}: {type(_one_exc).__name__}: {_one_exc}')
                 _route_df = pd.concat(_route_frames, ignore_index=True) if _route_frames else pd.DataFrame(columns=['ID trasy','Długość trasy [m]','Liczba odcinków','Typ sieci','Warstwy','Etykiety w pobliżu','Etykieta początku','Etykieta końca','Ścieżki między etykietami [JSON]','Źródło'])
+                if not _route_df.empty and 'Długość trasy [m]' not in _route_df.columns and 'Długość [m]' in _route_df.columns:
+                    _route_df['Długość trasy [m]'] = _route_df['Długość [m]']
                 st.session_state['cable_measured_routes'] = _route_df
                 st.session_state['cable_measured_routes_source'] = ', '.join(f.name for f in _route_uploads)
                 st.session_state['cable_route_measure_errors'] = _route_errors
@@ -486,7 +528,7 @@ if st.session_state.get('ui_page') == 'cables':
                 if _route_df.empty:
                     st.warning('Nie znaleziono geometrii tras w wybranych plikach. Sprawdź warstwy i jednostki DXF.')
                 else:
-                    st.success(f'Zidentyfikowano {len(_route_df)} komponentów tras z {len(_route_uploads)} plików. Wyniki pozostają diagnostyczne; długości kabli wymagają przypisania przebiegu między źródłem i odbiornikiem.')
+                    st.success(f'Zidentyfikowano {len(_route_df)} komponentów/oznaczeń tras z {len(_route_uploads)} plików. DXF może być automatycznie dopasowany po etykietach końcowych; wyniki z PDF bez etykiet źródła i celu należy przypisać ręcznie po sprawdzeniu rzutu.')
             except Exception as _route_exc:
                 st.error(f'Nie udało się zmierzyć tras: {type(_route_exc).__name__}: {_route_exc}')
         if st.button('📏 Oszacuj przebieg tam, gdzie brak zdefiniowanych tras', key='cable_route_estimate_missing', use_container_width=True, disabled=not _route_uploads):
@@ -498,9 +540,9 @@ if st.session_state.get('ui_page') == 'cables':
                 )
                 st.session_state['cable_route_estimates'] = _estimate_df
                 if _estimate_df.empty:
-                    st.warning('Nie utworzono szacunków. Potrzebne są dokładnie po jednej etykiecie źródła i odbiornika w tym samym DXF oraz znane jednostki rysunku.')
+                    st.warning('Nie utworzono szacunków. Sprawdź oznaczenia obwodów, rozdzielnicy źródłowej i jednostki DXF; powtarzające się etykiety obwodu są grupowane jako wspólny przebieg.')
                 else:
-                    st.warning(f'Utworzono {len(_estimate_df)} szacunków ortogonalnych. Nie są to pomiary rzeczywiste i wymagają sprawdzenia na rzucie.')
+                    st.warning(f'Utworzono {len(_estimate_df)} szacunków wspólnych przebiegów obwodów. Wspólne odcinki są liczone raz; rozdzielone przestrzennie rzuty nie są łączone sztucznym odcinkiem. Szacunek nie modeluje korytarzy, drzwi, otworów ani topologii rozgałęzień i wymaga ręcznej weryfikacji.')
             except Exception as _estimate_exc:
                 st.error(f'Nie udało się oszacować brakujących tras: {type(_estimate_exc).__name__}: {_estimate_exc}')
         _route_estimates = st.session_state.get('cable_route_estimates', pd.DataFrame())
@@ -581,18 +623,22 @@ if st.session_state.get('ui_page') == 'cables':
         with _p4:
             _reserve_pct = st.number_input('Zapas kabla [%]', min_value=0.0, max_value=100.0, value=float(st.session_state.get('cable_reserve_pct', 10.0)), step=1.0, key='cable_reserve_pct')
         st.caption('Parametry domyślne: pomieszczenie 3,0 m, wyjście z rozdzielnicy 0,3 m, odbiornik 2,0 m, zapas 10%. Wzór: (długość trasy + odcinek poza trasą + max(0, wysokość pomieszczenia − wysokość wyjścia) + max(0, wysokość pomieszczenia − wysokość odbiornika)) × (1 + zapas%). Wspólna trasa jest liczona raz; ilość materiału wylicza się osobno według liczby kabli równoległych.')
-        st.markdown('#### Lista kablowa — edycja i weryfikacja')
-        _edited_cables = st.data_editor(_cable_df.reindex(columns=CABLE_COLUMNS), key='cable_list_editor', use_container_width=True, hide_index=True, num_rows='dynamic',
-            column_config={
-                'Rozdzielnica źródłowa': st.column_config.TextColumn('Rozdzielnica źródłowa', help='Wpisz nazwę rozdzielnicy źródłowej.'),
-                'Odbiornik / rozdzielnica docelowa': st.column_config.TextColumn('Odbiornik / rozdzielnica docelowa', help='Wpisz odbiornik lub rozdzielnicę docelową.'),
-                'Oznaczenie obwodu': st.column_config.TextColumn('Oznaczenie obwodu', help='Wpisz oznaczenie obwodu, np. WL-01.'),
-                'Liczba równoległych kabli': st.column_config.NumberColumn(min_value=1, step=1),
-                'Długość trasy [m]': st.column_config.NumberColumn('Długość trasy [m]', min_value=0.0, step=0.5, help='Długość zmierzona po trasie kablowej na rzucie.'),
-                'Odcinek poza trasą [m]': st.column_config.NumberColumn('Odcinek poza trasą [m]', min_value=0.0, step=0.5, help='Odcinek prowadzony sufitem poza korytem/trasa.'),
-                'Długość [m]': st.column_config.NumberColumn(min_value=0, step=0.1),
-                'Status weryfikacji': st.column_config.SelectboxColumn(options=['Do weryfikacji','Potwierdzono na schemacie','Wymaga wyjaśnienia']),
-            })
+        st.markdown('#### Lista kablowa')
+        _primary_cols = [c for c in ['Oznaczenie obwodu', 'Rozdzielnica źródłowa', 'Odbiornik / rozdzielnica docelowa', 'Typ kabla', 'Liczba równoległych kabli', 'Długość [m]', 'Status weryfikacji'] if c in _cable_df.columns]
+        st.dataframe(_cable_df.reindex(columns=_primary_cols), use_container_width=True, hide_index=True)
+        with st.expander('✏️ Edycja szczegółowa i pola techniczne', expanded=False):
+            st.caption('Tutaj możesz edytować wszystkie pola, w tym długości tras, odcinki poza trasą, źródło, warstwę i uwagi. Eksport zachowuje pełny zestaw danych.')
+            _edited_cables = st.data_editor(_cable_df.reindex(columns=CABLE_COLUMNS), key='cable_list_editor', use_container_width=True, hide_index=True, num_rows='dynamic',
+                column_config={
+                    'Rozdzielnica źródłowa': st.column_config.TextColumn('Rozdzielnica źródłowa', help='Wpisz nazwę rozdzielnicy źródłowej.'),
+                    'Odbiornik / rozdzielnica docelowa': st.column_config.TextColumn('Odbiornik / rozdzielnica docelowa', help='Wpisz odbiornik lub rozdzielnicę docelową.'),
+                    'Oznaczenie obwodu': st.column_config.TextColumn('Oznaczenie obwodu', help='Wpisz oznaczenie obwodu, np. WL-01.'),
+                    'Liczba równoległych kabli': st.column_config.NumberColumn(min_value=1, step=1),
+                    'Długość trasy [m]': st.column_config.NumberColumn('Długość trasy [m]', min_value=0.0, step=0.5, help='Długość zmierzona po trasie kablowej na rzucie.'),
+                    'Odcinek poza trasą [m]': st.column_config.NumberColumn('Odcinek poza trasą [m]', min_value=0.0, step=0.5, help='Odcinek prowadzony sufitem poza korytem/trasa.'),
+                    'Długość [m]': st.column_config.NumberColumn(min_value=0, step=0.1),
+                    'Status weryfikacji': st.column_config.SelectboxColumn(options=['Do weryfikacji','Potwierdzono na schemacie','Wymaga wyjaśnienia']),
+                })
         st.session_state['cable_list_edited_df'] = _edited_cables
         if st.button('Oblicz długości z parametrów', key='cable_calc_lengths', use_container_width=True):
             _calc = _edited_cables.copy()
@@ -616,6 +662,8 @@ if st.session_state.get('ui_page') == 'cables':
             st.metric('Suma wpisanych długości', f'{_lengths.sum():g} m' if _lengths.notna().any() else 'Nie uzupełniono')
         _xlsx_cables = export_cable_list_xlsx(_edited_cables)
         st.download_button('⬇ Pobierz listę kablową XLSX', data=_xlsx_cables, file_name=_xlsx_filename('Lista_kablowa'), mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', use_container_width=True, key='download_cable_list_xlsx')
+        _csv_cables = _edited_cables.reindex(columns=CABLE_COLUMNS).to_csv(index=False, sep=';', encoding='utf-8-sig', lineterminator='\n').encode('utf-8-sig')
+        st.download_button('⬇ Pobierz listę kablową CSV', data=_csv_cables, file_name=_xlsx_filename('Lista_kablowa').rsplit('.', 1)[0] + '.csv', mime='text/csv; charset=utf-8', use_container_width=True, key='download_cable_list_csv')
         if st.button('Wyczyść listę kablową', key='clear_cable_list'):
             st.session_state.pop('cable_list_df', None); st.session_state.pop('cable_list_edited_df', None); st.session_state.pop('cable_list_errors', None); st.session_state.pop('cable_route_estimates', None)
             st.rerun()
@@ -1617,7 +1665,7 @@ else:
 
                 mapping = suggest_mapping(source_df, parsed_ath, source_col)
                 st.markdown('#### Mapowanie elementów')
-                st.caption('Program automatycznie wyszukuje element w katalogu RMS ZEST szablonu ATH. Ten sam RMS ZEST można przypisać do wielu wierszy XLSX — każdy wiersz zostanie wyeksportowany jako osobna pozycja ATH, a ilość materiału w katalogu RMS ZEST zostanie zsumowana.')
+                st.caption('Thanos przypisuje dokładne i jednoznaczne pozycje automatycznie. Podobne opisy pokazuje jako kandydatury z oceną dopasowania; sprawdź jednostki i uzupełnij RMS ZEST ręcznie dla pozycji wymagających decyzji. Ten sam RMS ZEST może obsługiwać wiele wierszy XLSX.')
                 # Reuse a mapping filtered by the user's delete action until the
                 # source XLSX/ATH inputs change (the editor key below resets then).
                 _mapping_override = st.session_state.get("ath_mapping_override")
@@ -1643,16 +1691,22 @@ else:
                 # is filtered before export.
                 mapping = mapping.copy()
                 mapping.insert(0, "Usuń", False)
+                _ath_readonly_columns = [
+                    'Kandydat RMS ZEST', 'Pewność dopasowania [%]', 'Jednostka XLSX',
+                    'Jednostka kandydata ATH', 'Kontrola jednostki', 'Status dopasowania',
+                ]
                 edited = st.data_editor(
                     mapping,
                     use_container_width=True,
                     hide_index=True,
                     num_rows='fixed',
+                    disabled=[c for c in _ath_readonly_columns if c in mapping.columns],
                     column_config={
                         'Usuń': st.column_config.CheckboxColumn('Usuń', help='Zaznacz element do usunięcia z bieżącego mapowania ATH.'),
                         'Ilość': st.column_config.NumberColumn('Ilość', min_value=0, step=1.0),
                         'Cena materiału': st.column_config.NumberColumn('Cena materiału', min_value=0.0, step=0.01, format='%.2f'),
                         'Robocizna jedn.': st.column_config.NumberColumn('Robocizna jedn.', min_value=0.0, step=0.01, format='%.2f'),
+                        'Pewność dopasowania [%]': st.column_config.NumberColumn('Pewność dopasowania [%]', format='%.1f'),
                     },
                     key=_ath_editor_key,
                 )
@@ -1687,7 +1741,12 @@ else:
 
                 unmatched = edited[edited['RMS ZEST'].astype(str).str.strip().eq('')] if not edited.empty else edited
                 if not unmatched.empty:
-                    st.warning(f'Nieprzypisane elementy: {len(unmatched)}. Uzupełnij kolumnę „RMS ZEST” zgodnie z katalogiem poniżej.')
+                    _candidate_count = int(unmatched['Kandydat RMS ZEST'].astype(str).str.strip().ne('').sum()) if 'Kandydat RMS ZEST' in unmatched.columns else 0
+                    st.warning(f'Nieprzypisane elementy: {len(unmatched)}; kandydatury do sprawdzenia: {_candidate_count}. Kolumnę „RMS ZEST” możesz uzupełnić po sprawdzeniu opisu i jednostki w katalogu poniżej.')
+                if 'Status dopasowania' in edited.columns:
+                    _unit_issues = edited[edited['Kontrola jednostki'].astype(str).str.contains('niezgodna|brak jednostki', case=False, na=False)] if 'Kontrola jednostki' in edited.columns else edited.iloc[0:0]
+                    if not _unit_issues.empty:
+                        st.error(f'Wykryto {len(_unit_issues)} kandydatur z niezgodną albo brakującą jednostką. Nie zostały przypisane automatycznie.')
                 with st.expander('Katalog materiałów z szablonu ATH', expanded=True):
                     st.dataframe(catalog_dataframe(parsed_ath), use_container_width=True, hide_index=True)
 

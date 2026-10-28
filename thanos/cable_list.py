@@ -12,6 +12,102 @@ from pathlib import Path
 
 import pandas as pd
 
+def audit_dxf_reference_alignment(uploaded_files) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Report DXF units/XREF transforms and shared-label coordinate agreement.
+
+    This is diagnostic only: it never changes coordinates, scales, or drawings.
+    Matching labels are candidates for review, not proof that two drawings share
+    a coordinate system or that crossed geometry is electrically connected.
+    """
+    import ezdxf
+    import unicodedata
+
+    def norm(value):
+        value = unicodedata.normalize('NFKC', _clean(str(value or ''))).casefold()
+        return re.sub(r'[^a-z0-9]+', '', value)
+
+    unit_names = {0: 'nieokreślone', 1: 'cale', 2: 'stopy', 4: 'mm', 5: 'cm', 6: 'm'}
+    file_rows, labels_by_file, units_by_file = [], {}, {}
+    for uploaded in uploaded_files or []:
+        name = getattr(uploaded, 'name', 'rysunek.dxf')
+        if Path(name).suffix.lower() != '.dxf':
+            continue
+        data = uploaded.getvalue()
+        try:
+            doc = ezdxf.read(io.StringIO(data.decode('utf-8-sig', errors='replace')))
+        except Exception:
+            from ezdxf import recover
+            doc, _ = recover.read(io.BytesIO(data))
+        units = int(doc.header.get('$INSUNITS', 0) or 0)
+        xrefs = []
+        for ent in doc.modelspace().query('INSERT'):
+            block_name = str(getattr(ent.dxf, 'name', '') or '')
+            block = doc.blocks.get(block_name) if block_name else None
+            is_xref = block_name.casefold().startswith(('xref_', 'xref-', '*xref'))
+            try:
+                is_xref = is_xref or bool(block.block_record.is_xref)
+            except Exception:
+                pass
+            if not is_xref:
+                continue
+            ins = ent.dxf.insert
+            scale = (float(getattr(ent.dxf, 'xscale', 1.0)),
+                     float(getattr(ent.dxf, 'yscale', 1.0)),
+                     float(getattr(ent.dxf, 'zscale', 1.0)))
+            xrefs.append({
+                'Blok': block_name,
+                'Wstawienie [X, Y, Z]': f'{float(ins.x):.3f}, {float(ins.y):.3f}, {float(ins.z):.3f}',
+                'Skala [X, Y, Z]': ', '.join(f'{v:.6g}' for v in scale),
+                'Obrót [°]': round(float(getattr(ent.dxf, 'rotation', 0.0)), 6),
+            })
+        file_rows.append({
+            'Plik': name, '$INSUNITS': units, 'Jednostki': unit_names.get(units, f'kod {units}'),
+            'Liczba XREF': len(xrefs),
+            'Transformacje XREF': '; '.join(
+                f"{x['Blok']} @ {x['Wstawienie [X, Y, Z]']} · skala {x['Skala [X, Y, Z]']} · obrót {x['Obrót [°]']}°"
+                for x in xrefs
+            ) or 'brak rozpoznanych XREF',
+            'Status': 'Diagnostyka — bez zmian geometrii',
+        })
+        points = {}
+        for ent in doc.modelspace():
+            typ = ent.dxftype()
+            if typ not in ('TEXT', 'MTEXT'):
+                continue
+            text = _clean(ent.dxf.text if typ == 'TEXT' else ent.text)
+            key = norm(text)
+            if not key:
+                continue
+            pt = ent.dxf.insert
+            points.setdefault(key, []).append((float(pt.x), float(pt.y), text))
+        labels_by_file[name] = points
+        units_by_file[name] = units
+
+    pair_rows = []
+    names = list(labels_by_file)
+    for i, name_a in enumerate(names):
+        for name_b in names[i + 1:]:
+            a, b = labels_by_file[name_a], labels_by_file[name_b]
+            common = sorted(set(a) & set(b))
+            same_units = units_by_file.get(name_a) == units_by_file.get(name_b) and units_by_file.get(name_a) in (4, 5, 6)
+            matches = []
+            for key in (common if same_units else []):
+                # Only a label occurring once in each drawing is a useful control candidate.
+                if len(a[key]) == 1 and len(b[key]) == 1:
+                    pa, pb = a[key][0], b[key][0]
+                    matches.append((key, pa, pb, math.hypot(pa[0]-pb[0], pa[1]-pb[1])))
+            residuals = [m[3] for m in matches]
+            pair_rows.append({
+                'Rysunek A': name_a, 'Rysunek B': name_b,
+                'Wspólne etykiety': len(common), 'Jednoznaczne pary etykiet': len(matches),
+                'Różnica współrzędnych mediana [jedn. CAD]': round(float(pd.Series(residuals).median()), 6) if residuals else None,
+                'Maks. różnica [jedn. CAD]': round(max(residuals), 6) if residuals else None,
+                'Przykładowe etykiety': ', '.join(m[0] for m in matches[:12]),
+                'Status': ('Kandydat do potwierdzenia wymiarami; nie dopasowywać automatycznie' if matches else ('Jednostki różne/nieznane — pominięto porównanie współrzędnych' if common and not same_units else 'Brak jednoznacznych wspólnych etykiet')) ,
+            })
+    return pd.DataFrame(file_rows), pd.DataFrame(pair_rows)
+
+
 CABLE_COLUMNS = [
     'Rozdzielnica źródłowa', 'Odbiornik / rozdzielnica docelowa',
     'Oznaczenie obwodu', 'Typ kabla', 'Przekrój', 'Liczba równoległych kabli',
@@ -1232,24 +1328,100 @@ def measure_dxf_cable_routes(uploaded_file, route_layers=None, snap_tolerance_mm
     return pd.DataFrame(result)
 
 
-def estimate_cable_paths_without_route_layers(uploaded_files, cables: pd.DataFrame, unit_override="auto") -> pd.DataFrame:
-    """Create explicitly unconfirmed ceiling-path estimates from exact endpoint labels on plans.
+def _manhattan_shared_tree_length(points):
+    """Length of a minimum Manhattan spanning tree in drawing units."""
+    points = list(dict.fromkeys((float(x), float(y)) for x, y in points))
+    if len(points) < 2:
+        return 0.0
+    used = {0}
+    best = [abs(x - points[0][0]) + abs(y - points[0][1]) for x, y in points]
+    best[0] = 0.0
+    total = 0.0
+    while len(used) < len(points):
+        pick = min((i for i in range(len(points)) if i not in used), key=lambda i: best[i])
+        total += best[pick]
+        used.add(pick)
+        x, y = points[pick]
+        for i, (px, py) in enumerate(points):
+            if i not in used:
+                best[i] = min(best[i], abs(px - x) + abs(py - y))
+    return total
 
-    This fallback is intentionally separate from measured route geometry. It only works when
-    both source and destination labels are found in the same DXF Model Space; it uses an
-    orthogonal (Manhattan) ceiling path and marks every result as an estimate requiring review.
-    It never treats a schematic, proximity alone, or a crossing as a connected route.
+
+def _cluster_circuit_points(points, max_gap_units):
+    """Split repeated circuit labels into spatially separate plan/view clusters."""
+    points = list(points)
+    parent = list(range(len(points)))
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+    for i, (x, y, _label) in enumerate(points):
+        for j in range(i):
+            px, py, _ = points[j]
+            if math.hypot(x - px, y - py) <= max_gap_units:
+                union(i, j)
+    groups = {}
+    for i, point in enumerate(points):
+        groups.setdefault(find(i), []).append(point)
+    return list(groups.values())
+
+
+def estimate_cable_paths_without_route_layers(
+    uploaded_files, cables: pd.DataFrame, unit_override="auto",
+    room_height=3.0, source_height=0.3, device_height=2.0, reserve_pct=10.0,
+) -> pd.DataFrame:
+    """Estimate a shared cable route per circuit from repeated circuit labels.
+
+    Repeated labels such as TP1/S13 represent multiple receivers on one circuit.
+    Their common run is estimated once with a Manhattan spanning tree, not as a
+    separate source-to-each-receiver length. Spatially separated plan views are
+    clustered so model-space placement of separate plans does not create a huge
+    artificial connection. The result remains an unconfirmed estimate.
     """
     import ezdxf
     import unicodedata
+    import json
+
     def norm(value):
         value = unicodedata.normalize('NFKC', _clean(str(value or ''))).casefold()
         return re.sub(r'[^a-z0-9]+', '', value)
-    cols = ['Indeks pozycji', 'Oznaczenie obwodu', 'Rozdzielnica źródłowa',
-            'Odbiornik / rozdzielnica docelowa', 'Długość trasy [m]', 'Plik źródłowy', 'Status', 'Uwagi']
+
+    cols = [
+        'Indeks pozycji', 'Indeksy pozycji', 'Rozdzielnica źródłowa',
+        'Oznaczenie obwodu', 'Liczba odbiorników', 'Liczba grup przestrzennych',
+        'Długość trasy [m]', 'Odcinek poza trasą [m]',
+        'Długość orientacyjna z zapasem [m]', 'Plik źródłowy', 'Status', 'Uwagi',
+    ]
     if cables is None or cables.empty or not uploaded_files:
         return pd.DataFrame(columns=cols)
-    override_map = {'mm': 0.001, 'cm': 0.01, 'm': 1.0}
+
+    override_map = {'mm': 0.001, 'millimeter': 0.001, 'millimeters': 0.001,
+                    'cm': 0.01, 'centimeter': 0.01, 'centimeters': 0.01,
+                    'm': 1.0, 'meter': 1.0, 'meters': 1.0}
+    grouped = {}
+    for idx, row in cables.iterrows():
+        source = _clean(str(row.get('Rozdzielnica źródłowa', '') or ''))
+        circuit = _clean(str(row.get('Oznaczenie obwodu', '') or ''))
+        ns, nc = norm(source), norm(circuit)
+        if not nc:
+            continue
+        if not ns and '/' in circuit:
+            source = circuit.split('/', 1)[0].strip()
+            ns = norm(source)
+        item = grouped.setdefault((ns, nc), {
+            'source': source, 'circuit': circuit, 'indices': [], 'targets': []
+        })
+        item['indices'].append(idx)
+        target = _clean(str(row.get('Odbiornik / rozdzielnica docelowa', '') or ''))
+        if target:
+            item['targets'].append(target)
+
     results = []
     for uploaded in uploaded_files:
         name = getattr(uploaded, 'name', 'plan.dxf')
@@ -1265,40 +1437,111 @@ def estimate_cable_paths_without_route_layers(uploaded_files, cables: pd.DataFra
         factor = override_map.get(str(unit_override or 'auto').casefold(), {4: .001, 5: .01, 6: 1.0}.get(units))
         if factor is None:
             continue
+
         label_points = {}
         for ent in doc.modelspace():
             typ = ent.dxftype()
             if typ not in ('TEXT', 'MTEXT'):
                 continue
             text = _clean(ent.dxf.text if typ == 'TEXT' else ent.text)
-            if not text:
+            key = norm(text)
+            if not key:
                 continue
-            point = ent.dxf.insert
-            label_points.setdefault(norm(text), []).append((float(point.x), float(point.y), text))
-        for idx, row in cables.iterrows():
-            source = _clean(str(row.get('Rozdzielnica źródłowa', '') or ''))
-            target = _clean(str(row.get('Odbiornik / rozdzielnica docelowa', '') or ''))
-            ns, nt = norm(source), norm(target)
-            if not ns or not nt or ns == nt or ns not in label_points or nt not in label_points:
+            pt = ent.dxf.insert
+            label_points.setdefault(key, []).append((float(pt.x), float(pt.y), text))
+
+        for (ns, nc), item in grouped.items():
+            circuit_points = label_points.get(nc, [])
+            circuit_labels_found = bool(circuit_points)
+            # Compatibility path for older tables with unique receiver labels.
+            if not circuit_points:
+                if ns and len(label_points.get(ns, [])) != 1:
+                    continue
+                fallback = []
+                for target in dict.fromkeys(item['targets']):
+                    found = label_points.get(norm(target), [])
+                    if len(found) != 1:
+                        fallback = []
+                        break
+                    fallback.extend(found)
+                circuit_points = fallback
+            if not circuit_points:
                 continue
-            # Multiple identical labels make the endpoint ambiguous; do not guess which one.
-            if len(label_points[ns]) != 1 or len(label_points[nt]) != 1:
+
+            point_tol = max(1e-6, 0.25 / factor)
+            unique_points = []
+            for x, y, label in sorted(circuit_points, key=lambda p: (p[0], p[1])):
+                if not any(math.hypot(x-px, y-py) <= point_tol for px, py, _ in unique_points):
+                    unique_points.append((x, y, label))
+            if not unique_points:
                 continue
-            sx, sy, sl = label_points[ns][0]
-            tx, ty, tl = label_points[nt][0]
-            length = (abs(tx - sx) + abs(ty - sy)) * factor
-            if length <= 0:
-                continue
-            results.append({'Indeks pozycji': idx, 'Oznaczenie obwodu': _clean(str(row.get('Oznaczenie obwodu', '') or '')),
-                'Rozdzielnica źródłowa': source, 'Odbiornik / rozdzielnica docelowa': target,
-                'Długość trasy [m]': round(length, 3), 'Plik źródłowy': name,
-                'Status': 'Szacunek — niepotwierdzony',
-                'Uwagi': f'Szacunek ortogonalny po suficie między dokładnymi etykietami {sl} ↔ {tl}; brak zdefiniowanej trasy kablowej. Wymaga sprawdzenia przebiegu i drożności.'})
+
+            source_points = label_points.get(ns, []) if ns else []
+            source_point = source_points[0] if len(source_points) == 1 else None
+            max_source_gap = 20.0 / factor
+            source_linked = bool(source_point and min(
+                math.hypot(source_point[0]-x, source_point[1]-y) for x, y, _ in unique_points
+            ) <= max_source_gap)
+
+            clusters = _cluster_circuit_points(unique_points, 15.0 / factor)
+            route_units = 0.0
+            linked_clusters = 0
+            for cluster in clusters:
+                points = [(x, y) for x, y, _ in cluster]
+                if source_linked and source_point and min(
+                    math.hypot(source_point[0]-x, source_point[1]-y) for x, y, _ in cluster
+                ) <= max_source_gap:
+                    points.append((source_point[0], source_point[1]))
+                    linked_clusters += 1
+                route_units += _manhattan_shared_tree_length(points)
+
+            route_m = route_units * factor
+            receiver_count = len(unique_points)
+            source_drop = max(0.0, float(room_height) - float(source_height)) if source_linked else 0.0
+            receiver_drops = max(0.0, float(room_height) - float(device_height)) * receiver_count
+            total_with_reserve = (route_m + source_drop + receiver_drops) * (1 + float(reserve_pct) / 100.0)
+            if source_linked:
+                source_note = (
+                    f'Rozdzielnica {item["source"]} została połączona geometrycznie z '
+                    f'{linked_clusters} grupą/grupami.'
+                )
+                if linked_clusters < len(clusters):
+                    source_note += (
+                        f' Pozostałe {len(clusters) - linked_clusters} oddalone grupy '
+                        'oszacowano lokalnie; nie zostały połączone sztucznym odcinkiem '
+                        'z rozdzielnicą.'
+                    )
+            else:
+                source_note = (
+                    f'Nie znaleziono jednoznacznej etykiety źródła {item["source"]!r} '
+                    'w odległości do 20 m od oznaczeń obwodu; pion źródłowy i połączenie '
+                    'między oddalonymi rzutami nie zostały dopisane.'
+                )
+            results.append({
+                'Indeks pozycji': item['indices'][0],
+                'Indeksy pozycji': json.dumps(item['indices'], ensure_ascii=False),
+                'Rozdzielnica źródłowa': item['source'],
+                'Oznaczenie obwodu': item['circuit'],
+                'Liczba odbiorników': receiver_count,
+                'Liczba grup przestrzennych': len(clusters),
+                'Długość trasy [m]': round(route_m, 3),
+                'Odcinek poza trasą [m]': round(source_drop + receiver_drops, 3),
+                'Długość orientacyjna z zapasem [m]': round(total_with_reserve, 3),
+                'Plik źródłowy': name,
+                'Status': ('Szacunek wspólnego przebiegu — niepotwierdzony' if circuit_labels_found else 'Szacunek — niepotwierdzony'),
+                'Uwagi': (
+                    f'Obwód {item["circuit"]}: {receiver_count} unikalnych lokalizacji etykiety, '
+                    f'{len(clusters)} grup przestrzennych. Wspólne odcinki policzono raz metodą '
+                    f'drzewa Manhattan; piony: źródło {source_drop:.2f} m, odbiorniki '
+                    f'{receiver_drops:.2f} m; zapas {float(reserve_pct):g}%. {source_note} '
+                    'Szacunek nie odtwarza rzeczywistych korytarzy, przeszkód ani topologii rozgałęzień; '
+                    'zweryfikować na rzucie przed kosztorysowaniem.'
+                ),
+            })
     result = pd.DataFrame(results, columns=cols)
     if not result.empty:
-        # Only keep a candidate if a cable row has exactly one estimate across all plans.
-        result = result[~result['Indeks pozycji'].duplicated(keep=False)].reset_index(drop=True)
-    return result
+        result = result.drop_duplicates(subset=['Rozdzielnica źródłowa', 'Oznaczenie obwodu', 'Plik źródłowy'], keep='first')
+    return result.reset_index(drop=True)
 
 
 def suggest_cable_route_matches(cables: pd.DataFrame, routes: pd.DataFrame) -> pd.DataFrame:

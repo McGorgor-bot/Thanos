@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import io
 import re
+from difflib import SequenceMatcher
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -115,33 +116,137 @@ def catalog_dataframe(template: dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(template["catalog"], columns=["zest_id", "name", "id", "jm", "price"])
 
 
+def _match_text(value: Any) -> str:
+    """Normalize a material/element label while retaining letters and digits."""
+    value = str(value or "").casefold().strip()
+    value = re.sub(r"^oprawa typu\s+", "", value, flags=re.I)
+    return re.sub(r"[^0-9a-ząćęłńóśźż]+", "", value)
+
+
+def _match_tokens(value: Any) -> set[str]:
+    value = str(value or "").casefold()
+    value = re.sub(r"^oprawa typu\s+", "", value, flags=re.I)
+    return {x for x in re.findall(r"[a-ząćęłńóśźż]+|\d+(?:[.,]\d+)?", value) if len(x) > 1}
+
+
+def _normalized_unit(value: Any) -> str:
+    unit = re.sub(r"\s+", "", str(value or "").casefold().replace(".", ""))
+    aliases = {
+        "szt": "szt", "sztuka": "szt", "sztuki": "szt", "sztuk": "szt",
+        "pcs": "szt", "ea": "szt", "m": "m", "mb": "m", "mbież": "m",
+        "mbiez": "m", "metr": "m", "metry": "m", "m2": "m2", "m²": "m2",
+        "m3": "m3", "m³": "m3", "kpl": "kpl", "komplet": "kpl", "komplety": "kpl",
+    }
+    return aliases.get(unit, unit)
+
+
 def suggest_mapping(df: pd.DataFrame, template: dict[str, Any], source_column: str = "Nazwa bloku") -> pd.DataFrame:
     cat = template["catalog"]
-    by_name = {}
-    for c in cat:
-        name = c["name"]
-        short = re.sub(r"^Oprawa typu\s+", "", name, flags=re.I).strip()
-        by_name[name.casefold()] = c
-        by_name[short.casefold()] = c
+    positions = template.get("by_rms", {})
+    unit_columns = {"j.m.", "jm", "jednostka", "unit", "jednostkamiary"}
     rows = []
     for _, r in df.iterrows():
         name = str(r.get(source_column, "") or "").strip()
         qty = _float(r.get("Ilość", 0))
-        hit = by_name.get(name.casefold())
-        # Fallbacks for common Thanos sheets.
-        if not hit:
-            for col in ("Typ elementu", "Nazwa elementu", "Nazwa z legendy", "Symbol/etykieta"):
-                cand = str(r.get(col, "") or "").strip()
-                if cand and cand.casefold() in by_name:
-                    hit = by_name[cand.casefold()]
-                    if not name:
-                        name = cand
+        row_labels = [name] if name else []
+        for col in ("Typ elementu", "Nazwa elementu", "Nazwa z legendy", "Symbol/etykieta"):
+            cand = str(r.get(col, "") or "").strip()
+            if cand and cand not in row_labels:
+                row_labels.append(cand)
+        if not name and row_labels:
+            name = row_labels[0]
+
+        source_unit = ""
+        for col in df.columns:
+            if _match_text(col) in unit_columns:
+                source_unit = str(r.get(col, "") or "").strip()
+                if source_unit:
                     break
+        source_unit_norm = _normalized_unit(source_unit)
+
+        # Rank each distinct RMS ZEST using the best of the source labels.
+        ranked: dict[str, dict[str, Any]] = {}
+        for c in cat:
+            zest_id = str(c.get("zest_id", ""))
+            if not zest_id:
+                continue
+            cat_labels = (c.get("name", ""), re.sub(r"^Oprawa typu\s+", "", c.get("name", ""), flags=re.I))
+            best_score, exact = 0.0, False
+            for row_label in row_labels:
+                row_norm = _match_text(row_label)
+                if not row_norm:
+                    continue
+                for cat_label in cat_labels:
+                    cat_norm = _match_text(cat_label)
+                    if not cat_norm:
+                        continue
+                    if row_norm == cat_norm:
+                        best_score, exact = 1.0, True
+                        break
+                    seq = SequenceMatcher(None, row_norm, cat_norm).ratio()
+                    rt, ct = _match_tokens(row_label), _match_tokens(cat_label)
+                    overlap = len(rt & ct) / len(rt | ct) if rt and ct else 0.0
+                    best_score = max(best_score, 0.65 * seq + 0.35 * overlap)
+                if exact:
+                    break
+            if best_score <= 0:
+                continue
+            pos = positions.get(zest_id) or {}
+            catalog_unit = str(pos.get("unit") or c.get("jm") or "").strip()
+            catalog_unit_norm = _normalized_unit(catalog_unit)
+            unit_status = "niepodana w XLSX" if not source_unit_norm else (
+                "zgodna" if source_unit_norm == catalog_unit_norm else
+                ("brak jednostki w ATH" if not catalog_unit_norm else "niezgodna")
+            )
+            ranked[zest_id] = {
+                "catalog": c, "score": best_score, "exact": exact,
+                "unit": catalog_unit, "unit_status": unit_status,
+                "unit_ok": not source_unit_norm or (catalog_unit_norm and source_unit_norm == catalog_unit_norm),
+            }
+        all_candidates = list(ranked.values())
+        compatible_candidates = [item for item in all_candidates if item["unit_ok"]]
+        # If at least one candidate has a compatible unit, rank only within
+        # that group. Otherwise retain the best textual candidate as a warning.
+        candidate_pool = compatible_candidates if source_unit_norm and compatible_candidates else all_candidates
+        best_candidates = sorted(candidate_pool, key=lambda item: (-item["score"], str(item["catalog"].get("zest_id", ""))))
+        best = best_candidates[0] if best_candidates else None
+        second_score = best_candidates[1]["score"] if len(best_candidates) > 1 else 0.0
+        margin = (best["score"] - second_score) if best else 0.0
+        is_unambiguous = bool(best and margin >= 0.10)
+        # Automatic assignment is deliberately conservative. Exact unique names
+        # may pass with an unspecified source unit, but fuzzy names require an
+        # explicitly matching unit, a high score, and a clear lead over #2.
+        auto_match = bool(best and is_unambiguous and best["unit_ok"] and (
+            best["exact"] or (best["score"] >= 0.92 and bool(source_unit_norm))
+        ))
+        hit = best["catalog"] if auto_match else None
+        candidate = best["catalog"] if best else None
         pos = template["by_rms"].get(hit["zest_id"]) if hit else None
+        confidence = round(best["score"] * 100, 1) if best else 0.0
+        if not best:
+            match_status = "Brak kandydata"
+        elif source_unit_norm and not best["unit_ok"]:
+            match_status = "Do weryfikacji — niezgodna lub nieznana jednostka"
+        elif not is_unambiguous:
+            match_status = "Do weryfikacji — kilka podobnych pozycji"
+        elif auto_match and best["exact"] and not source_unit_norm:
+            match_status = "Przypisano dokładnie — jednostka XLSX niepodana"
+        elif auto_match and best["exact"]:
+            match_status = "Przypisano dokładnie"
+        elif auto_match:
+            match_status = "Przypisano automatycznie — wysoka zgodność"
+        else:
+            match_status = "Propozycja — zatwierdź ręcznie"
         rows.append({
             "Element": name,
             "Ilość": qty,
             "RMS ZEST": hit["zest_id"] if hit else "",
+            "Kandydat RMS ZEST": candidate["zest_id"] if candidate else "",
+            "Pewność dopasowania [%]": confidence,
+            "Jednostka XLSX": source_unit,
+            "Jednostka kandydata ATH": best["unit"] if best else "",
+            "Kontrola jednostki": best["unit_status"] if best else "nie sprawdzono",
+            "Status dopasowania": match_status,
             "RMS ID": hit["id"] if hit else "",
             "Cena materiału": (template.get("price_by_rms", {}).get(hit["zest_id"], hit["price"]) if hit else 0.0),
             "J.m.": (pos["unit"] if pos else (hit["jm"] if hit else "szt.")),

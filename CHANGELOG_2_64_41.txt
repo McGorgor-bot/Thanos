@@ -1,0 +1,9 @@
+Thanos 2.64.41 — bezpieczne mapowanie Excel → ATH
+
+- Dokładne i jednoznaczne nazwy są przypisywane do RMS ZEST automatycznie.
+- Podobne opisy otrzymują kandydata i ocenę pewności; propozycje niejednoznaczne nie są wpisywane jako zatwierdzone mapowanie.
+- Jednostki z XLSX są porównywane z jednostkami pozycji ATH. Niezgodność blokuje automatyczne przypisanie i jest pokazana jako ostrzeżenie.
+- RMS ZEST pozostaje edytowalne w tabeli, aby użytkownik mógł zatwierdzić albo skorygować kandydaturę.
+- Eksport zachowuje możliwość przypisania jednego RMS ZEST do wielu wierszy zestawienia.
+
+Weryfikacja: składnia zmodyfikowanych plików Python oraz integralność archiwum ZIP. Nie uruchamiano testów aplikacji.

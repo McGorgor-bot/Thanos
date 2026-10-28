@@ -1,0 +1,9 @@
+Thanos 2.64.43 — automatyzacja przypisywania długości tras
+
+- Rozszerzono moduł pomiaru tras listy kablowej o obsługę PDF wektorowego obok DXF i CSV.
+- PDF: wykorzystuje istniejący pomiar wektorowy tras i wykrywanie skali; tworzy pozycje pomiarowe możliwe do przypisania ręcznie w tabeli.
+- DXF: zachowano graf linii/polilinii, dopasowanie etykiet końcowych i automatyczne przypisanie tylko jednoznacznych par.
+- Nie przypisuje automatycznie tras PDF bez jednoznacznych etykiet źródła/celu; takie wyniki wymagają potwierdzenia ręcznego.
+- Zachowano parametry wysokości, odcinków poza trasą i zapasu oraz eksport XLSX/CSV.
+
+Testy wykonane: kompilacja składniowa wszystkich plików Python; testy funkcjonalne z rzeczywistymi projektami wymagają uruchomienia aplikacji i wskazania rysunków przez użytkownika.
