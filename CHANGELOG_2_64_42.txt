@@ -1,0 +1,22 @@
+THANOS 2.64.42 — SCALENIE UI LISTY KABLOWEJ
+
+Baza: Thanos 2.64.41.
+Zachowano kod ATH, diagnostykę XREF/jednostek, pomiary tras oraz pozostałe moduły z wersji 2.64.41.
+
+Zmiany:
+- Uproszczono początek modułu „Lista kablowa” i opisy importu.
+- Ustawienia zaawansowane profilu projektu są domyślnie zwinięte.
+- Tabela listy kablowej pokazuje podstawowe kolumny; pełny edytor pól technicznych jest w sekcji rozwijanej.
+- Dodano eksport listy kablowej do CSV (separator średnik, UTF-8 BOM).
+- Zachowano istniejący eksport XLSX.
+- Wersję aplikacji podniesiono do 2.64.42.
+
+Weryfikacja wykonana lokalnie:
+- Kompilacja składniowa 15 plików Python: OK.
+- Import modułów ATH i listy kablowej: OK.
+- Test dymny mapowania i generowania ATH na syntetycznym szablonie: OK.
+- Test dymny eksportu CSV z polskimi znakami i ponownego odczytu: OK.
+
+Ograniczenia:
+- Nie wykonano pełnych testów end-to-end na rzeczywistych plikach projektowych.
+- Nie potwierdzono wizualnie interfejsu w uruchomionej przeglądarce.
