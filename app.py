@@ -537,6 +537,10 @@ if st.session_state.get('ui_page') == 'cables':
                     [f for f in _route_uploads if Path(f.name).suffix.lower() == '.dxf'],
                     _cable_df,
                     unit_override=_profile_unit,
+                    room_height=float(st.session_state.get('cable_room_height', 3.0)),
+                    source_height=float(st.session_state.get('cable_source_height', 0.3)),
+                    device_height=float(st.session_state.get('cable_device_height', 2.0)),
+                    reserve_pct=float(st.session_state.get('cable_reserve_pct', 10.0)),
                 )
                 st.session_state['cable_route_estimates'] = _estimate_df
                 if _estimate_df.empty:
@@ -558,9 +562,13 @@ if st.session_state.get('ui_page') == 'cables':
                 _target = st.session_state.get('cable_list_edited_df', _cable_df).copy()
                 _idx = int(_est['Indeks pozycji'])
                 if 0 <= _idx < len(_target):
+                    for _numeric_col in ('Długość trasy [m]', 'Piony w szacunku [m]', 'Długość [m]'):
+                        _target[_numeric_col] = pd.to_numeric(_target.get(_numeric_col), errors='coerce')
                     _target.loc[_target.index[_idx], 'Długość trasy [m]'] = float(_est['Długość trasy [m]'])
+                    _target.loc[_target.index[_idx], 'Piony w szacunku [m]'] = float(_est['Odcinek poza trasą [m]'])
+                    _target.loc[_target.index[_idx], 'Długość [m]'] = float(_est['Długość orientacyjna z zapasem [m]'])
                     _target.loc[_target.index[_idx], 'Status weryfikacji'] = 'Wymaga wyjaśnienia'
-                    _target.loc[_target.index[_idx], 'Uwagi'] = (str(_target.iloc[_idx].get('Uwagi') or '') + f" | {_est['Uwagi']} Źródło: {_est['Plik źródłowy']}.").strip(' |')
+                    _target.loc[_target.index[_idx], 'Uwagi'] = (str(_target.iloc[_idx].get('Uwagi') or '') + f" | {_est['Uwagi']} Piony zostały zapisane osobno i są uwzględniane przy ponownym obliczeniu. Źródło: {_est['Plik źródłowy']}.").strip(' |')
                     st.session_state['cable_list_edited_df'] = _target
                     st.success('Zastosowano szacunek jako długość trasy z oznaczeniem wymagającym weryfikacji.')
                     st.rerun()
@@ -571,6 +579,7 @@ if st.session_state.get('ui_page') == 'cables':
             _auto_matches = suggest_cable_route_matches(_cable_df, _measured_routes)
             if st.button('🔗 Dopasuj automatycznie jednoznaczne trasy', key='cable_route_auto_match', use_container_width=True, disabled=_auto_matches.empty):
                 _auto_target = st.session_state.get('cable_list_edited_df', _cable_df).copy()
+                _auto_target['Długość trasy [m]'] = pd.to_numeric(_auto_target.get('Długość trasy [m]'), errors='coerce')
                 _assigned = []
                 for _, _match in _auto_matches.iterrows():
                     _idx = int(_match['Indeks pozycji'])
@@ -605,6 +614,7 @@ if st.session_state.get('ui_page') == 'cables':
                 _chosen_route = st.selectbox('Zmierzona trasa', options=list(range(len(_route_options))), format_func=lambda i: _route_options[i], key='cable_route_selected_component')
             if st.button('Przypisz długość trasy do wybranej pozycji', key='cable_route_apply', use_container_width=True, disabled=(_cable_row_idx is None or _chosen_route == 0)):
                 _target_df = st.session_state.get('cable_list_edited_df', _cable_df).copy()
+                _target_df['Długość trasy [m]'] = pd.to_numeric(_target_df.get('Długość trasy [m]'), errors='coerce')
                 _selected = _measured_routes.iloc[_chosen_route-1]
                 _target_df.loc[_target_df.index[_cable_row_idx], 'Długość trasy [m]'] = float(_selected['Długość trasy [m]'])
                 _target_df.loc[_target_df.index[_cable_row_idx], 'Uwagi'] = (str(_target_df.iloc[_cable_row_idx].get('Uwagi') or '') + f" | Przypisana geometria {_selected['ID trasy']} z {_selected['Źródło']}.").strip(' |')
@@ -636,6 +646,7 @@ if st.session_state.get('ui_page') == 'cables':
                     'Liczba równoległych kabli': st.column_config.NumberColumn(min_value=1, step=1),
                     'Długość trasy [m]': st.column_config.NumberColumn('Długość trasy [m]', min_value=0.0, step=0.5, help='Długość zmierzona po trasie kablowej na rzucie.'),
                     'Odcinek poza trasą [m]': st.column_config.NumberColumn('Odcinek poza trasą [m]', min_value=0.0, step=0.5, help='Odcinek prowadzony sufitem poza korytem/trasa.'),
+                    'Piony w szacunku [m]': st.column_config.NumberColumn('Piony w szacunku [m]', min_value=0.0, step=0.5, help='Piony obliczone dla automatycznego szacunku wspólnej trasy. Pusta wartość oznacza użycie standardowych pionów z parametrów projektu.'),
                     'Długość [m]': st.column_config.NumberColumn(min_value=0, step=0.1),
                     'Status weryfikacji': st.column_config.SelectboxColumn(options=['Do weryfikacji','Potwierdzono na schemacie','Wymaga wyjaśnienia']),
                 })
@@ -646,7 +657,9 @@ if st.session_state.get('ui_page') == 'cables':
             _outside = pd.to_numeric(_calc.get('Odcinek poza trasą [m]', pd.Series(index=_calc.index, dtype=float)), errors='coerce').fillna(0.0)
             _source_drop = max(0.0, float(_room_h) - float(_source_h))
             _device_drop = max(0.0, float(_room_h) - float(_device_h))
-            _base = _route + _outside + _source_drop + _device_drop
+            _estimated_drops = pd.to_numeric(_calc.get('Piony w szacunku [m]', pd.Series(index=_calc.index, dtype=float)), errors='coerce')
+            _vertical = _estimated_drops.where(_estimated_drops.notna(), _source_drop + _device_drop)
+            _base = _route + _outside + _vertical
             _calc['Długość [m]'] = (_base * (1.0 + float(_reserve_pct) / 100.0)).where(_route.notna(), pd.to_numeric(_calc.get('Długość [m]', pd.Series(index=_calc.index, dtype=float)), errors='coerce'))
             _calc['Uwagi'] = _calc.apply(lambda r: (str(r.get('Uwagi') or '') + f' | Długość obliczona: trasa + odcinek poza trasą + piony; wysokość pom.: {_room_h:g} m; zapas: {_reserve_pct:g}%.').strip(' |'), axis=1)
             st.session_state['cable_list_edited_df'] = _calc

@@ -111,7 +111,7 @@ def audit_dxf_reference_alignment(uploaded_files) -> tuple[pd.DataFrame, pd.Data
 CABLE_COLUMNS = [
     'Rozdzielnica źródłowa', 'Odbiornik / rozdzielnica docelowa',
     'Oznaczenie obwodu', 'Typ kabla', 'Przekrój', 'Liczba równoległych kabli',
-    'Długość trasy [m]', 'Odcinek poza trasą [m]', 'Długość [m]', 'Źródło', 'Strona / warstwa', 'Status weryfikacji', 'Uwagi'
+    'Długość trasy [m]', 'Odcinek poza trasą [m]', 'Piony w szacunku [m]', 'Długość [m]', 'Źródło', 'Strona / warstwa', 'Status weryfikacji', 'Uwagi'
 ]
 
 # Common Polish electrical cable families and dimensions, e.g. N2XH-J 5x16,
@@ -1711,6 +1711,7 @@ def import_cable_list_table(data: bytes, filename: str) -> pd.DataFrame:
         'Liczba równoległych kabli': {'liczbarownoleglychkabli','liczbakabli','ilosckabli','ilosc'},
         'Długość trasy [m]': {'dlugosctrasym','dlugosctrasam'},
         'Odcinek poza trasą [m]': {'odcinekp ozatrasam','odcinekp ozatrasym','odcinekp ozatrasie'},
+        'Piony w szacunku [m]': {'pionywszacunkum','pionyszacowane','pionym'},
         'Długość [m]': {'dlugoscm','dlugosc'},
         'Źródło': {'zrodlo','source'},
         'Strona / warstwa': {'stronawarstwa','warstwa','strona'},
@@ -1747,10 +1748,10 @@ def import_cable_list_table(data: bytes, filename: str) -> pd.DataFrame:
         raise ValueError('Rozpoznano tabelę, ale nie znaleziono kolumny Typ kabla.')
     for col in CABLE_COLUMNS:
         if col not in frame.columns:
-            frame[col] = None if col in ('Długość trasy [m]', 'Odcinek poza trasą [m]', 'Długość [m]') else ''
+            frame[col] = None if col in ('Długość trasy [m]', 'Odcinek poza trasą [m]', 'Piony w szacunku [m]', 'Długość [m]') else ''
     frame = frame.reindex(columns=CABLE_COLUMNS)
     frame = frame[frame['Typ kabla'].fillna('').astype(str).str.strip().ne('')].copy()
-    for col in ('Liczba równoległych kabli', 'Długość trasy [m]', 'Odcinek poza trasą [m]', 'Długość [m]'):
+    for col in ('Liczba równoległych kabli', 'Długość trasy [m]', 'Odcinek poza trasą [m]', 'Piony w szacunku [m]', 'Długość [m]'):
         frame[col] = pd.to_numeric(frame[col].astype(str).str.replace(',', '.', regex=False), errors='coerce')
     frame['Liczba równoległych kabli'] = frame['Liczba równoległych kabli'].fillna(1).clip(lower=1).astype(int)
     frame['Źródło'] = frame['Źródło'].replace('', filename).fillna(filename)
